@@ -5,7 +5,8 @@ export interface Subscription {
   due_date: string;
   price: string;
   login_email: string;
-  login_password: string;
+  login_password?: string;
+  has_login_password?: boolean;
   action: string;
   payment_status: string;
   created_at?: string;

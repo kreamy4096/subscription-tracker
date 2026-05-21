@@ -73,7 +73,7 @@ function getInitialFormState(subscription: Subscription | null) {
     due_date_recurring: recurringValue,
     price: normalizePriceValue(subscription.price || ""),
     login_email: subscription.login_email || "",
-    login_password: subscription.login_password || "",
+    login_password: "",
     action: subscription.action || "Renewal",
     payment_status: subscription.payment_status || "Paid",
   };
@@ -331,7 +331,11 @@ export default function SubscriptionModal({
                   type={showPassword ? "text" : "password"}
                   value={formData.login_password}
                   onChange={handleChange}
-                  placeholder="••••••••"
+                  placeholder={
+                    mode === "edit" && subscription?.has_login_password
+                      ? "Leave blank to keep saved password"
+                      : "Optional password"
+                  }
                   className="h-12 w-full rounded-xl border border-outline-variant bg-surface-container-low px-4 pr-12 text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
                 />
                 <button

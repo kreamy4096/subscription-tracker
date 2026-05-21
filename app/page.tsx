@@ -93,7 +93,8 @@ function normalizeSubscription(
     due_date: item.due_date ?? "",
     price: item.price ?? "",
     login_email: item.login_email ?? "",
-    login_password: item.login_password ?? "",
+    has_login_password:
+      item.has_login_password ?? Boolean(item.login_password),
     action: item.action ?? "",
     payment_status: item.payment_status ?? "",
     created_at: item.created_at,
@@ -187,9 +188,6 @@ export default function Home() {
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
   const [selectedSubscription, setSelectedSubscription] =
     useState<Subscription | null>(null);
-  const [revealedPasswords, setRevealedPasswords] = useState<
-    Record<string, boolean>
-  >({});
 
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
 
@@ -295,13 +293,6 @@ export default function Home() {
     setSubscriptions((current) =>
       current.filter((item) => item.id !== subscriptionId),
     );
-  };
-
-  const toggleRowPassword = (subscriptionId: string) => {
-    setRevealedPasswords((current) => ({
-      ...current,
-      [subscriptionId]: !current[subscriptionId],
-    }));
   };
 
   return (
@@ -588,30 +579,8 @@ export default function Home() {
                           </p>
                           <div className="flex items-center gap-2">
                             <span className="text-label-sm text-secondary">
-                              {item.login_password
-                                ? revealedPasswords[item.id]
-                                  ? item.login_password
-                                  : "••••••••"
-                                : "-"}
+                              {item.has_login_password ? "Stored" : "-"}
                             </span>
-                            {item.login_password ? (
-                              <button
-                                type="button"
-                                onClick={() => toggleRowPassword(item.id)}
-                                className="rounded-full p-1 text-secondary transition-colors hover:bg-surface-container-high hover:text-on-surface"
-                                aria-label={
-                                  revealedPasswords[item.id]
-                                    ? "Hide password"
-                                    : "Show password"
-                                }
-                              >
-                                <span className="material-symbols-outlined text-[16px]">
-                                  {revealedPasswords[item.id]
-                                    ? "visibility_off"
-                                    : "visibility"}
-                                </span>
-                              </button>
-                            ) : null}
                           </div>
                         </div>
                       </td>

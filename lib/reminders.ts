@@ -55,7 +55,7 @@ function normalizeSubscription(
     due_date: item.due_date ?? "",
     price: item.price ?? "",
     login_email: item.login_email ?? "",
-    login_password: item.login_password ?? "",
+    has_login_password: item.has_login_password ?? false,
     action: item.action ?? "",
     payment_status: item.payment_status ?? "",
     created_at: item.created_at,
@@ -80,12 +80,6 @@ function startOfDay(value: Date) {
 function addMonths(value: Date, count: number) {
   const copy = new Date(value);
   copy.setMonth(copy.getMonth() + count);
-  return copy;
-}
-
-function addDays(value: Date, count: number) {
-  const copy = new Date(value);
-  copy.setDate(copy.getDate() + count);
   return copy;
 }
 
@@ -178,7 +172,7 @@ async function getReminderSettings() {
 
 async function getUnpaidSubscriptions() {
   const result = await query(
-    `SELECT *
+    `SELECT id, tool, subscription, due_date, price, login_email, action, payment_status, created_at
      FROM subscriptions
      WHERE COALESCE(payment_status, '') != 'Paid'
      ORDER BY created_at DESC`,

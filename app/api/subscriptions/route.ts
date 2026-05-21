@@ -1,24 +1,56 @@
 import { NextResponse } from "next/server";
+import { parseSubscriptionInput } from "@/lib/api-validation";
+import { requireBasicAuth } from "@/lib/auth";
+import { encryptCredential } from "@/lib/credentials";
 import { query } from "@/lib/db";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const authError = requireBasicAuth(request);
+  if (authError) {
+    return authError;
+  }
+
   try {
     const result = await query(
-      "SELECT * FROM subscriptions ORDER BY created_at DESC",
+      `SELECT
+        id,
+        tool,
+        subscription,
+        due_date,
+        price,
+        login_email,
+        (
+          COALESCE(login_password_ciphertext, '') != ''
+          OR COALESCE(login_password, '') != ''
+        ) AS has_login_password,
+        action,
+        payment_status,
+        created_at
+       FROM subscriptions
+       ORDER BY created_at DESC`,
     );
     return NextResponse.json(result.rows);
   } catch (error: unknown) {
     console.error("API Error in GET /api/subscriptions:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal Server Error" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }
 }
 
 export async function POST(request: Request) {
+  const authError = requireBasicAuth(request);
+  if (authError) {
+    return authError;
+  }
+
   try {
-    const body = await request.json();
+    const parsed = parseSubscriptionInput(await request.json());
+    if ("error" in parsed) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
+    }
+
     const {
       tool,
       subscription,
@@ -28,28 +60,51 @@ export async function POST(request: Request) {
       login_password,
       action,
       payment_status,
-    } = body;
+    } = parsed.data;
 
-    if (!tool) {
-      return NextResponse.json(
-        { error: "Tool name is required" },
-        { status: 400 },
-      );
-    }
+    const encryptedPassword = login_password
+      ? encryptCredential(login_password)
+      : null;
 
     const result = await query(
       `INSERT INTO subscriptions (
-        tool, subscription, due_date, price, login_email, login_password, action, payment_status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        tool,
+        subscription,
+        due_date,
+        price,
+        login_email,
+        login_password,
+        login_password_ciphertext,
+        login_password_iv,
+        login_password_tag,
+        action,
+        payment_status
+      ) VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, $8, $9, $10)
+      RETURNING
+        id,
+        tool,
+        subscription,
+        due_date,
+        price,
+        login_email,
+        (
+          COALESCE(login_password_ciphertext, '') != ''
+          OR COALESCE(login_password, '') != ''
+        ) AS has_login_password,
+        action,
+        payment_status,
+        created_at`,
       [
         tool,
-        subscription || "",
-        due_date || "",
-        price || "",
-        login_email || "",
-        login_password || "",
-        action || "",
-        payment_status || "",
+        subscription,
+        due_date,
+        price,
+        login_email,
+        encryptedPassword?.ciphertext ?? null,
+        encryptedPassword?.iv ?? null,
+        encryptedPassword?.tag ?? null,
+        action,
+        payment_status,
       ],
     );
 
@@ -57,7 +112,7 @@ export async function POST(request: Request) {
   } catch (error: unknown) {
     console.error("API Error in POST /api/subscriptions:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal Server Error" },
+      { error: "Internal Server Error" },
       { status: 500 },
     );
   }

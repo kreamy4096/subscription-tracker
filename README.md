@@ -24,6 +24,10 @@ The app expects these environment variables:
 
 ```bash
 DATABASE_URL=
+SUBTRACK_ADMIN_USERNAME=
+SUBTRACK_ADMIN_PASSWORD=
+CREDENTIAL_ENCRYPTION_KEY=
+REMINDER_CRON_SECRET=
 ZOHO_CLIENT_ID=
 ZOHO_CLIENT_SECRET=
 ZOHO_REFRESH_TOKEN=
@@ -39,16 +43,16 @@ Whoever deploys it should:
 1. Deploy it to a platform that supports a long-running Node.js process if using the in-app `node-cron` scheduler as-is.
 2. Set all required environment variables listed above.
 3. Confirm the database is reachable from the deployed environment.
-4. Verify the manual reminder route works:
+4. Verify the manual reminder route works with Basic Auth or a cron bearer token:
 
 ```text
 POST /api/reminders/send
 ```
 
-For quick browser testing, the route also accepts:
+For scheduled jobs, send:
 
 ```text
-GET /api/reminders/send
+Authorization: Bearer <REMINDER_CRON_SECRET>
 ```
 
 Expected success response:

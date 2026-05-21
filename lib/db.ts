@@ -13,7 +13,7 @@ export function getPool() {
     pool = new Pool({
       connectionString,
       ssl: {
-        rejectUnauthorized: false,
+        rejectUnauthorized: true,
       },
     });
   }
@@ -46,10 +46,20 @@ export async function initDb() {
         price TEXT,
         login_email TEXT,
         login_password TEXT,
+        login_password_ciphertext TEXT,
+        login_password_iv TEXT,
+        login_password_tag TEXT,
         action TEXT,
         payment_status TEXT,
         created_at TIMESTAMPTZ DEFAULT now()
       );
+    `);
+
+    await activePool.query(`
+      ALTER TABLE subscriptions
+        ADD COLUMN IF NOT EXISTS login_password_ciphertext TEXT,
+        ADD COLUMN IF NOT EXISTS login_password_iv TEXT,
+        ADD COLUMN IF NOT EXISTS login_password_tag TEXT;
     `);
 
     await activePool.query(`
