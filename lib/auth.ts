@@ -1,9 +1,10 @@
 import "server-only";
 
-import { timingSafeEqual } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 
 const realm = "SubTrack Pro";
+export const sessionCookieName = "subtrack_session";
 
 function safeEqual(left: string, right: string) {
   const leftBuffer = Buffer.from(left);
@@ -25,6 +26,79 @@ function unauthorized() {
   });
 }
 
+function getSessionSecret() {
+  const password = process.env.SUBTRACK_ADMIN_PASSWORD;
+  const encryptionKey = process.env.CREDENTIAL_ENCRYPTION_KEY;
+
+  if (!password || !encryptionKey) {
+    return null;
+  }
+
+  return `${password}:${encryptionKey}`;
+}
+
+function signSessionPayload(payload: string) {
+  const secret = getSessionSecret();
+  if (!secret) {
+    return null;
+  }
+
+  return createHmac("sha256", secret).update(payload).digest("hex");
+}
+
+export function createSessionToken(username: string) {
+  const payload = `${username}:${Date.now()}`;
+  const signature = signSessionPayload(payload);
+
+  if (!signature) {
+    return null;
+  }
+
+  return `${Buffer.from(payload, "utf8").toString("base64url")}.${signature}`;
+}
+
+export function isValidSessionToken(token: string | undefined) {
+  if (!token) {
+    return false;
+  }
+
+  const [encodedPayload, signature] = token.split(".");
+  if (!encodedPayload || !signature) {
+    return false;
+  }
+
+  const payload = Buffer.from(encodedPayload, "base64url").toString("utf8");
+  const [username, timestampText] = payload.split(":");
+  const timestamp = Number.parseInt(timestampText ?? "", 10);
+  const expectedUsername = process.env.SUBTRACK_ADMIN_USERNAME;
+  const expectedSignature = signSessionPayload(payload);
+
+  if (!expectedUsername || !expectedSignature || username !== expectedUsername) {
+    return false;
+  }
+
+  const maxAgeMs = 1000 * 60 * 60 * 12;
+  if (!Number.isFinite(timestamp) || Date.now() - timestamp > maxAgeMs) {
+    return false;
+  }
+
+  return safeEqual(signature, expectedSignature);
+}
+
+export function validateAdminCredentials(username: string, password: string) {
+  const expectedUsername = process.env.SUBTRACK_ADMIN_USERNAME;
+  const expectedPassword = process.env.SUBTRACK_ADMIN_PASSWORD;
+
+  if (!expectedUsername || !expectedPassword) {
+    return false;
+  }
+
+  return (
+    safeEqual(username, expectedUsername) &&
+    safeEqual(password, expectedPassword)
+  );
+}
+
 export function requireBasicAuth(request: Request) {
   const expectedUsername = process.env.SUBTRACK_ADMIN_USERNAME;
   const expectedPassword = process.env.SUBTRACK_ADMIN_PASSWORD;
@@ -34,6 +108,17 @@ export function requireBasicAuth(request: Request) {
       { error: "Server authentication is not configured" },
       { status: 503 },
     );
+  }
+
+  const cookieHeader = request.headers.get("cookie");
+  const sessionToken = cookieHeader
+    ?.split(";")
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(`${sessionCookieName}=`))
+    ?.slice(sessionCookieName.length + 1);
+
+  if (isValidSessionToken(sessionToken)) {
+    return null;
   }
 
   const authorization = request.headers.get("authorization");
@@ -52,10 +137,7 @@ export function requireBasicAuth(request: Request) {
   const username = decoded.slice(0, separatorIndex);
   const password = decoded.slice(separatorIndex + 1);
 
-  if (
-    !safeEqual(username, expectedUsername) ||
-    !safeEqual(password, expectedPassword)
-  ) {
+  if (!validateAdminCredentials(username, password)) {
     return unauthorized();
   }
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 const realm = "SubTrack Pro";
+const sessionCookieName = "subtrack_session";
 
 function unauthorized() {
   return new NextResponse("Authentication required", {
@@ -12,29 +13,104 @@ function unauthorized() {
   });
 }
 
-export function proxy(request: NextRequest) {
+async function signSessionPayload(payload: string, secret: string) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(payload),
+  );
+
+  return Array.from(new Uint8Array(signature))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function hasValidSession(request: NextRequest, secret: string) {
+  const token = request.cookies.get(sessionCookieName)?.value;
+  if (!token) {
+    return false;
+  }
+
+  const [encodedPayload, signature] = token.split(".");
+  if (!encodedPayload || !signature) {
+    return false;
+  }
+
+  let payload = "";
+  try {
+    payload = atob(encodedPayload.replaceAll("-", "+").replaceAll("_", "/"));
+  } catch {
+    return false;
+  }
+  const [username, timestampText] = payload.split(":");
+  const timestamp = Number.parseInt(timestampText ?? "", 10);
+  const expectedUsername = process.env.SUBTRACK_ADMIN_USERNAME;
+
+  if (!expectedUsername || username !== expectedUsername) {
+    return false;
+  }
+
+  const maxAgeMs = 1000 * 60 * 60 * 12;
+  if (!Number.isFinite(timestamp) || Date.now() - timestamp > maxAgeMs) {
+    return false;
+  }
+
+  const expectedSignature = await signSessionPayload(payload, secret);
+  return signature === expectedSignature;
+}
+
+function isPublicPath(pathname: string) {
+  return pathname === "/login" || pathname === "/api/login";
+}
+
+function apiUnauthorized() {
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
+
+export async function proxy(request: NextRequest) {
   const expectedUsername = process.env.SUBTRACK_ADMIN_USERNAME;
   const expectedPassword = process.env.SUBTRACK_ADMIN_PASSWORD;
   const cronSecret = process.env.REMINDER_CRON_SECRET;
+  const encryptionKey = process.env.CREDENTIAL_ENCRYPTION_KEY;
   const authorization = request.headers.get("authorization");
+  const pathname = request.nextUrl.pathname;
 
   if (
-    request.nextUrl.pathname === "/api/reminders/send" &&
+    pathname === "/api/reminders/send" &&
     cronSecret &&
     authorization === `Bearer ${cronSecret}`
   ) {
     return NextResponse.next();
   }
 
-  if (!expectedUsername || !expectedPassword) {
+  if (isPublicPath(pathname)) {
+    return NextResponse.next();
+  }
+
+  if (!expectedUsername || !expectedPassword || !encryptionKey) {
     return NextResponse.json(
       { error: "Server authentication is not configured" },
       { status: 503 },
     );
   }
 
+  if (await hasValidSession(request, `${expectedPassword}:${encryptionKey}`)) {
+    return NextResponse.next();
+  }
+
   if (!authorization?.startsWith("Basic ")) {
-    return unauthorized();
+    if (pathname.startsWith("/api/")) {
+      return apiUnauthorized();
+    }
+
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   let decoded = "";
@@ -54,7 +130,7 @@ export function proxy(request: NextRequest) {
   const password = decoded.slice(separatorIndex + 1);
 
   if (username !== expectedUsername || password !== expectedPassword) {
-    return unauthorized();
+    return pathname.startsWith("/api/") ? apiUnauthorized() : unauthorized();
   }
 
   return NextResponse.next();
