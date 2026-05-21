@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Edit Subscription - SubTrack Pro</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary": "#ffffff",
+                    "on-primary-fixed": "#07006c",
+                    "hunter-cyan": "#02B6D4",
+                    "primary-container": "#6063ee",
+                    "background": "#f8f9fa",
+                    "on-tertiary-container": "#fffbff",
+                    "warning": "#F59E0B",
+                    "on-error": "#ffffff",
+                    "tertiary-fixed-dim": "#ffb783",
+                    "primary": "#4648d4",
+                    "surface-container-lowest": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "surface-tint": "#494bd6",
+                    "primary-fixed-dim": "#c0c1ff",
+                    "surface-container": "#edeeef",
+                    "on-secondary-fixed": "#121d24",
+                    "on-primary-container": "#fffbff",
+                    "on-background": "#191c1d",
+                    "on-tertiary-fixed": "#301400",
+                    "tertiary": "#904900",
+                    "tertiary-container": "#b55d00",
+                    "surface-variant": "#e1e3e4",
+                    "secondary": "#556068",
+                    "on-surface-variant": "#464554",
+                    "tertiary-fixed": "#ffdcc5",
+                    "inverse-primary": "#c0c1ff",
+                    "success": "#10B981",
+                    "surface": "#f8f9fa",
+                    "surface-container-high": "#e7e8e9",
+                    "on-tertiary": "#ffffff",
+                    "surface-container-low": "#f3f4f5",
+                    "surface-bright": "#f8f9fa",
+                    "surface-gray": "#F3F4F6",
+                    "on-secondary": "#ffffff",
+                    "inverse-surface": "#2e3132",
+                    "inverse-on-surface": "#f0f1f2",
+                    "secondary-fixed": "#d8e4ee",
+                    "on-secondary-container": "#5a666e",
+                    "info": "#3B82F6",
+                    "primary-fixed": "#e1e0ff",
+                    "error": "#EF4444",
+                    "secondary-fixed-dim": "#bcc8d1",
+                    "on-secondary-fixed-variant": "#3d4850",
+                    "on-primary-fixed-variant": "#2f2ebe",
+                    "surface-container-highest": "#e1e3e4",
+                    "on-tertiary-fixed-variant": "#703700",
+                    "secondary-container": "#d8e4ee",
+                    "outline-variant": "#c7c4d7",
+                    "on-surface": "#191c1d",
+                    "surface-dim": "#d9dadb",
+                    "hunter-orange": "#FA5320",
+                    "on-error-container": "#93000a",
+                    "outline": "#767586"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "margin-desktop": "32px",
+                    "margin-mobile": "16px",
+                    "gutter": "24px",
+                    "container-max": "1440px",
+                    "base": "4px"
+            },
+            "fontFamily": {
+                    "title-lg": ["Inter"],
+                    "headline-lg-mobile": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "display-lg": ["Inter"],
+                    "label-md": ["Inter"],
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "headline-md": ["Inter"],
+                    "label-sm": ["Inter"]
+            },
+            "fontSize": {
+                    "title-lg": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "label-sm": ["11px", {"lineHeight": "16px", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .modal-overlay {
+            background-color: rgba(25, 28, 29, 0.4);
+            backdrop-filter: blur(4px);
+        }
+        .custom-shadow {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface min-h-screen">
+<!-- Background Dashboard (Dimmed State) -->
+<div class="fixed inset-0 overflow-hidden pointer-events-none opacity-50 grayscale-[0.2]">
+<img alt="Dashboard Background" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCK_Z46g5nC19PkPoU-2YT7ZrkLECQyGM34Cvaw7jqiz1xuZtWRJJ6boiOCPls-P2GJZHpXExn-Fyr_owiyNQ3FI5-Nt2BhVDytxSvm90KmtQVLRclEJH0l067oHM2iSJLC6c9pSSez7SmjVgQfQedlYo1TO6Qak5AltQKQRwDpgrcFKAVZ7rxF-OfxbVc2Lzd1L_agpciMFKyYZomPy_VKDiC-AE1_gR1sk8h-nA3dnWxfYfQLwy9XSh5iOV-_SBVAt3AOtiGRoiQ"/>
+</div>
+<!-- Modal Overlay -->
+<div class="fixed inset-0 z-50 flex items-center justify-center p-margin-mobile md:p-margin-desktop modal-overlay">
+<!-- Modal Container -->
+<div class="bg-surface-container-lowest w-full max-w-[560px] rounded-xl custom-shadow overflow-hidden flex flex-col animate-in fade-in zoom-in duration-300">
+<!-- Modal Header -->
+<div class="px-8 py-6 border-b border-surface-container-high flex justify-between items-center">
+<h2 class="font-headline-md text-headline-md text-on-surface">Edit Subscription</h2>
+<button class="text-secondary hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<!-- Modal Content (Scrollable if needed) -->
+<form class="p-8 space-y-6">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-gutter">
+<!-- Tool Name -->
+<div class="col-span-1 md:col-span-2 space-y-2">
+<label class="font-label-md text-label-md text-secondary">Tool</label>
+<div class="relative">
+<input class="w-full h-11 px-4 rounded-lg border border-outline-variant bg-surface focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-body-md text-body-md outline-none" type="text" value="Apollo"/>
+<span class="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline text-[20px]">search</span>
+</div>
+</div>
+<!-- Plan -->
+<div class="space-y-2">
+<label class="font-label-md text-label-md text-secondary">Plan</label>
+<div class="relative">
+<select class="w-full h-11 pl-4 pr-10 rounded-lg border border-outline-variant bg-surface appearance-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-body-md text-body-md outline-none cursor-pointer">
+<option>Free</option>
+<option selected="">Paid</option>
+<option>Enterprise</option>
+</select>
+<span class="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline pointer-events-none">expand_more</span>
+</div>
+</div>
+<!-- Due Date -->
+<div class="space-y-2">
+<label class="font-label-md text-label-md text-secondary">Due Date</label>
+<div class="relative">
+<input class="w-full h-11 px-4 rounded-lg border border-outline-variant bg-surface focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-body-md text-body-md outline-none" type="text" value="15th of month"/>
+<span class="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline text-[20px]">calendar_today</span>
+</div>
+</div>
+<!-- Price -->
+<div class="space-y-2">
+<label class="font-label-md text-label-md text-secondary">Price</label>
+<div class="relative">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 text-secondary font-body-md">$</span>
+<input class="w-full h-11 pl-8 pr-4 rounded-lg border border-outline-variant bg-surface focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-body-md text-body-md outline-none" type="text" value="99"/>
+</div>
+</div>
+<!-- Login Email -->
+<div class="space-y-2">
+<label class="font-label-md text-label-md text-secondary">Login Email</label>
+<input class="w-full h-11 px-4 rounded-lg border border-outline-variant bg-surface focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-body-md text-body-md outline-none" type="email" value="admin@apollo.io"/>
+</div>
+<!-- Action -->
+<div class="space-y-2">
+<label class="font-label-md text-label-md text-secondary">Action</label>
+<div class="relative">
+<select class="w-full h-11 pl-4 pr-10 rounded-lg border border-outline-variant bg-surface appearance-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-body-md text-body-md outline-none cursor-pointer">
+<option selected="">Renewal</option>
+<option>Cancellation</option>
+<option>Upgrade</option>
+</select>
+<span class="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline pointer-events-none">expand_more</span>
+</div>
+</div>
+<!-- Payment Status -->
+<div class="space-y-2">
+<label class="font-label-md text-label-md text-secondary">Payment Status</label>
+<div class="relative">
+<select class="w-full h-11 pl-4 pr-10 rounded-lg border border-outline-variant bg-surface appearance-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all font-body-md text-body-md outline-none cursor-pointer">
+<option>Paid</option>
+<option selected="">Not Paid</option>
+<option>Pending</option>
+</select>
+<span class="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline pointer-events-none">expand_more</span>
+</div>
+</div>
+</div>
+<!-- Helper text -->
+<div class="flex items-center gap-2 p-3 bg-surface-container-low rounded-lg">
+<span class="material-symbols-outlined text-info text-[18px]">info</span>
+<p class="font-label-md text-label-md text-secondary">Changes will reflect in your next monthly analytics report.</p>
+</div>
+</form>
+<!-- Modal Footer -->
+<div class="px-8 py-6 bg-surface-gray border-t border-surface-container-high flex flex-col sm:flex-row justify-between items-center gap-4">
+<button class="flex items-center gap-2 text-error hover:bg-error-container/20 px-4 py-2 rounded-lg transition-colors font-label-md text-label-md">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+                    Delete Subscription
+                </button>
+<div class="flex items-center gap-3 w-full sm:w-auto">
+<button class="flex-1 sm:flex-none px-6 py-2.5 rounded-lg border border-outline-variant text-secondary hover:bg-surface-container-high transition-colors font-label-md text-label-md">
+                        Cancel
+                    </button>
+<button class="flex-1 sm:flex-none px-6 py-2.5 rounded-lg bg-primary-container text-on-primary font-label-md text-label-md hover:opacity-90 active:scale-95 transition-all shadow-sm">
+                        Save Changes
+                    </button>
+</div>
+</div>
+</div>
+</div>
+<!-- SubTrack Pro Layout Shell (Static/Reference) -->
+<div class="fixed top-0 left-0 w-full z-40">
+<div class="flex justify-between items-center h-16 px-margin-desktop w-full ml-auto bg-surface-bright border-b border-surface-container-high">
+<div class="flex items-center gap-4">
+<span class="text-title-lg font-title-lg font-bold text-primary">SubTrack Pro</span>
+</div>
+</div>
+</div>
+<script>
+        // Simple micro-interaction for primary button
+        document.querySelector('.bg-primary-container').addEventListener('click', (e) => {
+            const btn = e.currentTarget;
+            btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-[20px]">refresh</span> Saving...';
+            setTimeout(() => {
+                btn.innerHTML = 'Save Changes';
+            }, 1500);
+        });
+
+        // Close button functionality simulation
+        document.querySelectorAll('button').forEach(btn => {
+            if (btn.innerText.includes('Cancel') || btn.querySelector('.material-symbols-outlined')?.innerText === 'close') {
+                btn.onclick = () => {
+                    document.querySelector('.modal-overlay').classList.add('opacity-0');
+                    document.querySelector('.modal-container')?.classList.add('scale-95');
+                    setTimeout(() => {
+                        alert('Modal closed interaction simulated.');
+                        location.reload();
+                    }, 300);
+                };
+            }
+        });
+    </script>
+</body></html>
