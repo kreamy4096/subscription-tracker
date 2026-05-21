@@ -70,11 +70,19 @@ export function parseReminderSettingsInput(value: unknown) {
   }
 
   const input = value as Record<string, unknown>;
-  const email = cleanString(input.email, 254);
+  const email = cleanString(input.email, 1000);
   const daysBefore = Number.parseInt(String(input.days_before ?? ""), 10);
 
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return { error: "Email must be a valid email address" };
+  const emails = email
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (
+    emails.length === 0 ||
+    emails.some((item) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item))
+  ) {
+    return { error: "Email must contain one or more valid email addresses" };
   }
 
   if (!Number.isInteger(daysBefore) || daysBefore < 1 || daysBefore > 90) {

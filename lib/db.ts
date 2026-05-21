@@ -75,6 +75,11 @@ export async function initDb() {
     `);
 
     await activePool.query(`
+      COMMENT ON COLUMN subscriptions.login_password
+      IS 'Legacy credential storage column. New credentials are stored encrypted.';
+    `);
+
+    await activePool.query(`
       CREATE TABLE IF NOT EXISTS reminder_settings (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         email TEXT NOT NULL,

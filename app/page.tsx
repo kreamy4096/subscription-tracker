@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
 import ReminderDrawer from "@/components/ReminderDrawer";
 import SubscriptionModal from "@/components/SubscriptionModal";
 import type { Subscription } from "@/lib/subscription-types";
@@ -44,34 +44,12 @@ const seedSubscriptions: Subscription[] = [
     id: "seed-3",
     tool: "Slack",
     subscription: "Pro",
-    due_date: "Jun 02, 2026",
+    due_date: "Jun 2, 2026",
     price: "$12",
     login_email: "team@subtrack.co",
     login_password: "",
     action: "Renewal",
     payment_status: "Paid",
-  },
-  {
-    id: "seed-4",
-    tool: "Linear",
-    subscription: "Startup",
-    due_date: "May 29, 2026",
-    price: "$0",
-    login_email: "product@subtrack.co",
-    login_password: "",
-    action: "FREE",
-    payment_status: "Paid",
-  },
-  {
-    id: "seed-5",
-    tool: "AWS",
-    subscription: "Business Support",
-    due_date: "May 31, 2026",
-    price: "$75",
-    login_email: "infra@subtrack.co",
-    login_password: "",
-    action: "Renewal",
-    payment_status: "Not Paid",
   },
 ];
 
@@ -83,6 +61,8 @@ const avatarBackgrounds = [
   "bg-surface-container-high text-secondary",
 ];
 
+const MASKED_PASSWORD = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
+
 function normalizeSubscription(
   item: Partial<Subscription> & { id: string },
 ): Subscription {
@@ -93,6 +73,7 @@ function normalizeSubscription(
     due_date: item.due_date ?? "",
     price: item.price ?? "",
     login_email: item.login_email ?? "",
+    login_password: item.login_password ?? "",
     has_login_password:
       item.has_login_password ?? Boolean(item.login_password),
     action: item.action ?? "",
@@ -188,6 +169,10 @@ export default function Home() {
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
   const [selectedSubscription, setSelectedSubscription] =
     useState<Subscription | null>(null);
+  const [openCredentialsId, setOpenCredentialsId] = useState<string | null>(null);
+  const [popoverPasswordVisible, setPopoverPasswordVisible] = useState(false);
+  const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
+  const credentialsPopoverRef = useRef<HTMLDivElement | null>(null);
 
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
 
@@ -222,6 +207,26 @@ export default function Home() {
 
     void loadSubscriptions();
   }, []);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (
+        credentialsPopoverRef.current &&
+        !credentialsPopoverRef.current.contains(event.target as Node)
+      ) {
+        setOpenCredentialsId(null);
+        setPopoverPasswordVisible(false);
+      }
+    };
+
+    if (openCredentialsId) {
+      document.addEventListener("mousedown", handlePointerDown);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [openCredentialsId]);
 
   const filteredSubscriptions = subscriptions.filter((item) => {
     const matchesSearch =
@@ -295,6 +300,54 @@ export default function Home() {
     );
   };
 
+  const handleStatusChange = async (
+    subscription: Subscription,
+    paymentStatus: string,
+  ) => {
+    setStatusSavingId(subscription.id);
+    setError("");
+
+    try {
+      const response = await fetch(`/api/subscriptions/${subscription.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...subscription,
+          payment_status: paymentStatus,
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Unable to update payment status.");
+        return;
+      }
+
+      setSubscriptions((current) =>
+        current.map((item) =>
+          item.id === subscription.id ? normalizeSubscription(data) : item,
+        ),
+      );
+    } catch (statusError) {
+      console.error("Failed to update payment status:", statusError);
+      setError("A network error occurred while updating payment status.");
+    } finally {
+      setStatusSavingId(null);
+    }
+  };
+
+  const toggleCredentialsPopover = (subscriptionId: string) => {
+    if (openCredentialsId === subscriptionId) {
+      setOpenCredentialsId(null);
+      setPopoverPasswordVisible(false);
+      return;
+    }
+
+    setOpenCredentialsId(subscriptionId);
+    setPopoverPasswordVisible(false);
+  };
   return (
     <>
       <aside className="fixed top-0 left-0 z-50 hidden h-screen w-[240px] flex-col border-r border-surface-container-high bg-surface lg:flex">
@@ -518,18 +571,25 @@ export default function Home() {
             <table className="w-full min-w-[880px] border-collapse text-left">
               <thead>
                 <tr className="bg-surface-container-low">
-                  {["Tool", "Plan", "Due Date", "Price", "Login", "Action", "Status", "Edit"].map(
-                    (heading) => (
-                      <th
-                        key={heading}
-                        className={`px-6 py-4 text-label-md tracking-wider text-secondary uppercase ${
-                          heading === "Edit" ? "text-right" : ""
-                        }`}
-                      >
-                        {heading}
-                      </th>
-                    ),
-                  )}
+                  {[
+                    "Tool",
+                    "Plan",
+                    "Due Date",
+                    "Price",
+                    "Credentials",
+                    "Action",
+                    "Status",
+                    "Edit",
+                  ].map((heading) => (
+                    <th
+                      key={heading}
+                      className={`px-6 py-4 text-label-md tracking-wider text-secondary uppercase ${
+                        heading === "Edit" ? "text-right" : ""
+                      }`}
+                    >
+                      {heading}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-container-high">
@@ -572,17 +632,77 @@ export default function Home() {
                       <td className="px-6 py-4 font-semibold text-on-surface">
                         {item.price || "-"}
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="space-y-1">
-                          <p className="text-body-md text-on-surface">
-                            {item.login_email || "-"}
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <span className="text-label-sm text-secondary">
-                              {item.has_login_password ? "Stored" : "-"}
-                            </span>
+                      <td className="relative px-6 py-4">
+                        <button
+                          type="button"
+                          onClick={() => toggleCredentialsPopover(item.id)}
+                          className="rounded-full border border-outline-variant p-2 text-secondary transition-colors hover:bg-surface-container-high hover:text-primary"
+                          aria-label="View credentials"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">
+                            key
+                          </span>
+                        </button>
+
+                        {openCredentialsId === item.id ? (
+                          <div
+                            ref={credentialsPopoverRef}
+                            className="absolute top-[calc(100%-8px)] left-0 z-20 w-[320px] rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-[0_18px_42px_rgba(25,28,29,0.12)]"
+                          >
+                            <div className="mb-3 flex items-center gap-2 text-primary">
+                              <span className="material-symbols-outlined text-[18px]">
+                                key
+                              </span>
+                              <p className="text-label-md font-semibold uppercase tracking-[0.16em]">
+                                Credentials
+                              </p>
+                            </div>
+
+                            <div className="space-y-4">
+                              <div>
+                                <p className="mb-2 text-label-md font-semibold text-on-surface">
+                                  Login Email
+                                </p>
+                                <div className="rounded-xl border border-outline-variant bg-surface-container-low px-4 py-3 text-body-md text-on-surface">
+                                  {item.login_email || "-"}
+                                </div>
+                              </div>
+
+                              <div>
+                                <p className="mb-2 text-label-md font-semibold text-on-surface">
+                                  Password
+                                </p>
+                                <div className="flex items-center overflow-hidden rounded-xl border border-outline-variant bg-surface-container-low">
+                                  <div className="flex-1 px-4 py-3 text-body-md text-on-surface">
+                                    {item.login_password
+                                      ? popoverPasswordVisible
+                                        ? item.login_password
+                                        : MASKED_PASSWORD
+                                      : "-"}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setPopoverPasswordVisible((current) => !current)
+                                    }
+                                    className="border-l border-outline-variant px-3 py-3 text-secondary transition-colors hover:bg-surface-container-high hover:text-on-surface"
+                                    aria-label={
+                                      popoverPasswordVisible
+                                        ? "Hide password"
+                                        : "Show password"
+                                    }
+                                  >
+                                    <span className="material-symbols-outlined text-[18px]">
+                                      {popoverPasswordVisible
+                                        ? "visibility_off"
+                                        : "visibility"}
+                                    </span>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                        </div>
+                        ) : null}
                       </td>
                       <td className="px-6 py-4">
                         <span
@@ -592,11 +712,24 @@ export default function Home() {
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <span
-                          className={`inline-flex rounded-full px-3 py-1 text-label-sm font-semibold ${getStatusBadgeClasses(item.payment_status)}`}
+                        <select
+                          value={item.payment_status || "Not Paid"}
+                          disabled={statusSavingId === item.id}
+                          onChange={(event) =>
+                            void handleStatusChange(item, event.target.value)
+                          }
+                          className={`rounded-full border px-3 py-1 text-label-sm font-semibold outline-none transition-colors ${getStatusBadgeClasses(
+                            item.payment_status || "Not Paid",
+                          )} ${
+                            statusSavingId === item.id
+                              ? "cursor-wait opacity-70"
+                              : "cursor-pointer"
+                          }`}
                         >
-                          {item.payment_status || "-"}
-                        </span>
+                          <option value="Paid">Paid</option>
+                          <option value="Pending">Pending</option>
+                          <option value="Not Paid">Not Paid</option>
+                        </select>
                       </td>
                       <td className="px-6 py-4 text-right">
                         <button

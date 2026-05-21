@@ -73,7 +73,7 @@ function getInitialFormState(subscription: Subscription | null) {
     due_date_recurring: recurringValue,
     price: normalizePriceValue(subscription.price || ""),
     login_email: subscription.login_email || "",
-    login_password: "",
+    login_password: subscription.login_password || "",
     action: subscription.action || "Renewal",
     payment_status: subscription.payment_status || "Paid",
   };
@@ -93,6 +93,7 @@ export default function SubscriptionModal({
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [error, setError] = useState("");
 
   const handleChange = (
@@ -167,6 +168,7 @@ export default function SubscriptionModal({
       }
 
       onDeleted(subscription.id);
+      setShowDeleteConfirm(false);
       onClose();
     } catch (deleteError) {
       console.error("Failed to delete subscription:", deleteError);
@@ -395,7 +397,7 @@ export default function SubscriptionModal({
               {mode === "edit" ? (
                 <button
                   type="button"
-                  onClick={handleDelete}
+                  onClick={() => setShowDeleteConfirm(true)}
                   disabled={isDeleting}
                   className="inline-flex items-center gap-2 rounded-xl border border-error/25 bg-error-container px-4 py-3 text-label-md font-semibold text-error transition-colors hover:bg-error-container/80 disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -440,6 +442,41 @@ export default function SubscriptionModal({
             </div>
           </div>
         </form>
+
+        {showDeleteConfirm ? (
+          <div className="absolute inset-0 flex items-center justify-center rounded-[20px] bg-inverse-surface/20 p-6 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-2xl border border-outline-variant bg-surface-container-lowest p-6 shadow-xl">
+              <p className="text-label-md font-medium tracking-[0.18em] text-error uppercase">
+                Confirm Delete
+              </p>
+              <h3 className="mt-2 text-xl font-semibold text-on-surface">
+                Delete this subscription?
+              </h3>
+              <p className="mt-3 text-body-md text-on-surface-variant">
+                This action permanently removes the subscription from SubTrack
+                Pro.
+              </p>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="rounded-xl border border-outline-variant px-4 py-2 text-label-md font-semibold text-secondary transition-colors hover:bg-surface-container-low"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="rounded-xl bg-error px-4 py-2 text-label-md font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isDeleting ? "Deleting..." : "Yes, Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import { parseSubscriptionInput } from "@/lib/api-validation";
 import { requireBasicAuth } from "@/lib/auth";
 import { encryptCredential } from "@/lib/credentials";
 import { query } from "@/lib/db";
+import { serializeSubscriptionRow } from "@/lib/subscription-serialization";
 
 export async function PUT(
   request: Request,
@@ -56,6 +57,10 @@ export async function PUT(
         due_date,
         price,
         login_email,
+        login_password,
+        login_password_ciphertext,
+        login_password_iv,
+        login_password_tag,
         (
           COALESCE(login_password_ciphertext, '') != ''
           OR COALESCE(login_password, '') != ''
@@ -85,7 +90,9 @@ export async function PUT(
       );
     }
 
-    return NextResponse.json(result.rows[0]);
+    return NextResponse.json(
+      serializeSubscriptionRow(result.rows[0] as { id: string }),
+    );
   } catch (error: unknown) {
     console.error("API Error in PUT /api/subscriptions/[id]:", error);
     return NextResponse.json(
@@ -122,7 +129,7 @@ export async function DELETE(
 
     return NextResponse.json({
       message: "Subscription deleted successfully",
-      deleted: result.rows[0],
+      deleted: serializeSubscriptionRow(result.rows[0] as { id: string }),
     });
   } catch (error: unknown) {
     console.error("API Error in DELETE /api/subscriptions/[id]:", error);

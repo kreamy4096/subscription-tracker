@@ -298,7 +298,7 @@ function buildReminderEmail(subscriptions: Subscription[]) {
 }
 
 async function sendZohoReminderEmail(
-  recipientEmail: string,
+  recipientEmails: string[],
   subscriptions: Subscription[],
 ) {
   const accessToken = await getZohoAccessToken();
@@ -313,8 +313,8 @@ async function sendZohoReminderEmail(
       },
       body: JSON.stringify({
         fromAddress: getRequiredEnv("ZOHO_FROM_EMAIL"),
-        toAddress: recipientEmail,
-        subject: `SubTrack Pro — You have ${subscriptions.length} subscription(s) due soon`,
+        toAddress: recipientEmails.join(","),
+        subject: `SubTrack Pro - You have ${subscriptions.length} subscription(s) due soon`,
         content: buildReminderEmail(subscriptions),
         mailFormat: "html",
       }),
@@ -334,6 +334,15 @@ export async function sendDueReminders() {
     return { sent: 0 };
   }
 
+  const recipientEmails = settings.email
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (recipientEmails.length === 0) {
+    return { sent: 0 };
+  }
+
   const now = new Date();
   const subscriptions = await getUnpaidSubscriptions();
   const dueSoon = subscriptions.filter((item) => {
@@ -349,6 +358,6 @@ export async function sendDueReminders() {
     return { sent: 0 };
   }
 
-  await sendZohoReminderEmail(settings.email, dueSoon);
+  await sendZohoReminderEmail(recipientEmails, dueSoon);
   return { sent: dueSoon.length };
 }

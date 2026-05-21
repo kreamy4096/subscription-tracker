@@ -123,12 +123,15 @@ export default function ReminderDrawer({
                 </label>
                 <input
                   className="text-body-md font-body-md h-11 w-full rounded-lg border border-outline-variant bg-surface-container-low px-4 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
-                  placeholder="your@email.com"
-                  type="email"
+                  placeholder="one@email.com, two@email.com"
+                  type="text"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
+                <p className="mt-2 text-label-sm text-secondary">
+                  Separate multiple recipients with commas.
+                </p>
               </div>
 
               <div>

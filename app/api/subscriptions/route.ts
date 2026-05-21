@@ -3,6 +3,7 @@ import { parseSubscriptionInput } from "@/lib/api-validation";
 import { requireBasicAuth } from "@/lib/auth";
 import { encryptCredential } from "@/lib/credentials";
 import { query } from "@/lib/db";
+import { serializeSubscriptionRow } from "@/lib/subscription-serialization";
 
 export async function GET(request: Request) {
   const authError = requireBasicAuth(request);
@@ -19,6 +20,10 @@ export async function GET(request: Request) {
         due_date,
         price,
         login_email,
+        login_password,
+        login_password_ciphertext,
+        login_password_iv,
+        login_password_tag,
         (
           COALESCE(login_password_ciphertext, '') != ''
           OR COALESCE(login_password, '') != ''
@@ -29,7 +34,11 @@ export async function GET(request: Request) {
        FROM subscriptions
        ORDER BY created_at DESC`,
     );
-    return NextResponse.json(result.rows);
+    return NextResponse.json(
+      result.rows.map((row) =>
+        serializeSubscriptionRow(row as { id: string }),
+      ),
+    );
   } catch (error: unknown) {
     console.error("API Error in GET /api/subscriptions:", error);
     return NextResponse.json(
@@ -87,6 +96,10 @@ export async function POST(request: Request) {
         due_date,
         price,
         login_email,
+        login_password,
+        login_password_ciphertext,
+        login_password_iv,
+        login_password_tag,
         (
           COALESCE(login_password_ciphertext, '') != ''
           OR COALESCE(login_password, '') != ''
@@ -108,7 +121,10 @@ export async function POST(request: Request) {
       ],
     );
 
-    return NextResponse.json(result.rows[0], { status: 201 });
+    return NextResponse.json(
+      serializeSubscriptionRow(result.rows[0] as { id: string }),
+      { status: 201 },
+    );
   } catch (error: unknown) {
     console.error("API Error in POST /api/subscriptions:", error);
     return NextResponse.json(
