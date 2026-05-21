@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SubTrack Pro
 
-## Getting Started
+SubTrack Pro is a Next.js subscription management app with:
 
-First, run the development server:
+- a dashboard UI for tracking tools and plans
+- PostgreSQL-backed subscription and reminder settings APIs
+- Zoho Mail reminder sending via OAuth2 REST API
+- a daily reminder cron job plus a manual reminder trigger route
+
+## Local Development
+
+Run the app locally:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The app expects these environment variables:
 
-## Learn More
+```bash
+DATABASE_URL=
+ZOHO_CLIENT_ID=
+ZOHO_CLIENT_SECRET=
+ZOHO_REFRESH_TOKEN=
+ZOHO_FROM_EMAIL=
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Short Deployment Note
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+This app is a full Next.js server app, not static hosting.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Whoever deploys it should:
 
-## Deploy on Vercel
+1. Deploy it to a platform that supports a long-running Node.js process if using the in-app `node-cron` scheduler as-is.
+2. Set all required environment variables listed above.
+3. Confirm the database is reachable from the deployed environment.
+4. Verify the manual reminder route works:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```text
+POST /api/reminders/send
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+For quick browser testing, the route also accepts:
+
+```text
+GET /api/reminders/send
+```
+
+Expected success response:
+
+```json
+{ "success": true, "sent": 0 }
+```
+
+or:
+
+```json
+{ "success": true, "sent": N }
+```
+
+where `N` is the number of due subscriptions included in the reminder email.
+
+## Notes
+
+- Reminder recipient email is read dynamically from the `reminder_settings` table.
+- Zoho access tokens are refreshed on demand before each email send.
+- Subscriptions marked `Paid` are excluded from reminder emails.

@@ -318,7 +318,7 @@ export default function Home() {
               </span>
             </div>
             <div>
-              <p className="text-label-md font-bold text-on-surface">Workspace</p>
+              <p className="text-label-md font-bold text-on-surface">Workforce</p>
               <p className="text-label-sm text-secondary">Enterprise Tier</p>
             </div>
           </div>
