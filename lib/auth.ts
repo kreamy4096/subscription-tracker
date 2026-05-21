@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHmac, timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
+import { query } from "@/lib/db";
 
 const realm = "SubTrack Pro";
 export const sessionCookieName = "subtrack_session";
@@ -27,14 +28,14 @@ function unauthorized() {
 }
 
 function getSessionSecret() {
-  const password = process.env.SUBTRACK_ADMIN_PASSWORD;
+  const secret = process.env.AUTH_SESSION_SECRET;
   const encryptionKey = process.env.CREDENTIAL_ENCRYPTION_KEY;
 
-  if (!password || !encryptionKey) {
+  if (!secret && !encryptionKey) {
     return null;
   }
 
-  return `${password}:${encryptionKey}`;
+  return secret || encryptionKey;
 }
 
 function signSessionPayload(payload: string) {
@@ -70,10 +71,9 @@ export function isValidSessionToken(token: string | undefined) {
   const payload = Buffer.from(encodedPayload, "base64url").toString("utf8");
   const [username, timestampText] = payload.split(":");
   const timestamp = Number.parseInt(timestampText ?? "", 10);
-  const expectedUsername = process.env.SUBTRACK_ADMIN_USERNAME;
   const expectedSignature = signSessionPayload(payload);
 
-  if (!expectedUsername || !expectedSignature || username !== expectedUsername) {
+  if (!username || !expectedSignature) {
     return false;
   }
 
@@ -85,7 +85,7 @@ export function isValidSessionToken(token: string | undefined) {
   return safeEqual(signature, expectedSignature);
 }
 
-export function validateAdminCredentials(username: string, password: string) {
+function validateEnvCredentials(username: string, password: string) {
   const expectedUsername = process.env.SUBTRACK_ADMIN_USERNAME;
   const expectedPassword = process.env.SUBTRACK_ADMIN_PASSWORD;
 
@@ -99,17 +99,29 @@ export function validateAdminCredentials(username: string, password: string) {
   );
 }
 
-export function requireBasicAuth(request: Request) {
-  const expectedUsername = process.env.SUBTRACK_ADMIN_USERNAME;
-  const expectedPassword = process.env.SUBTRACK_ADMIN_PASSWORD;
-
-  if (!expectedUsername || !expectedPassword) {
-    return NextResponse.json(
-      { error: "Server authentication is not configured" },
-      { status: 503 },
-    );
+export async function validateAdminCredentials(username: string, password: string) {
+  const normalizedUsername = username.trim().toLowerCase();
+  if (!normalizedUsername || !password) {
+    return false;
   }
 
+  const result = await query(
+    `SELECT 1
+     FROM app_users
+     WHERE email_normalized = lower($1)
+       AND password_hash = crypt($2, password_hash)
+     LIMIT 1`,
+    [normalizedUsername, password],
+  );
+
+  if (result.rowCount && result.rowCount > 0) {
+    return true;
+  }
+
+  return validateEnvCredentials(username, password);
+}
+
+export function requireBasicAuth(request: Request) {
   const cookieHeader = request.headers.get("cookie");
   const sessionToken = cookieHeader
     ?.split(";")
@@ -137,7 +149,7 @@ export function requireBasicAuth(request: Request) {
   const username = decoded.slice(0, separatorIndex);
   const password = decoded.slice(separatorIndex + 1);
 
-  if (!validateAdminCredentials(username, password)) {
+  if (!validateEnvCredentials(username, password)) {
     return unauthorized();
   }
 

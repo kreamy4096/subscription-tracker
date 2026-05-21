@@ -37,6 +37,18 @@ export async function initDb() {
   const activePool = getPool();
 
   try {
+    await activePool.query("CREATE EXTENSION IF NOT EXISTS pgcrypto;");
+
+    await activePool.query(`
+      CREATE TABLE IF NOT EXISTS app_users (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        email TEXT NOT NULL,
+        email_normalized TEXT GENERATED ALWAYS AS (lower(email)) STORED UNIQUE,
+        password_hash TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT now()
+      );
+    `);
+
     await activePool.query(`
       CREATE TABLE IF NOT EXISTS subscriptions (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

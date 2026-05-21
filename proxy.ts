@@ -51,9 +51,8 @@ async function hasValidSession(request: NextRequest, secret: string) {
   }
   const [username, timestampText] = payload.split(":");
   const timestamp = Number.parseInt(timestampText ?? "", 10);
-  const expectedUsername = process.env.SUBTRACK_ADMIN_USERNAME;
 
-  if (!expectedUsername || username !== expectedUsername) {
+  if (!username) {
     return false;
   }
 
@@ -78,7 +77,8 @@ export async function proxy(request: NextRequest) {
   const expectedUsername = process.env.SUBTRACK_ADMIN_USERNAME;
   const expectedPassword = process.env.SUBTRACK_ADMIN_PASSWORD;
   const cronSecret = process.env.REMINDER_CRON_SECRET;
-  const encryptionKey = process.env.CREDENTIAL_ENCRYPTION_KEY;
+  const sessionSecret =
+    process.env.AUTH_SESSION_SECRET || process.env.CREDENTIAL_ENCRYPTION_KEY;
   const authorization = request.headers.get("authorization");
   const pathname = request.nextUrl.pathname;
 
@@ -94,14 +94,14 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (!expectedUsername || !expectedPassword || !encryptionKey) {
+  if (!sessionSecret) {
     return NextResponse.json(
       { error: "Server authentication is not configured" },
       { status: 503 },
     );
   }
 
-  if (await hasValidSession(request, `${expectedPassword}:${encryptionKey}`)) {
+  if (await hasValidSession(request, sessionSecret)) {
     return NextResponse.next();
   }
 
@@ -129,7 +129,12 @@ export async function proxy(request: NextRequest) {
   const username = decoded.slice(0, separatorIndex);
   const password = decoded.slice(separatorIndex + 1);
 
-  if (username !== expectedUsername || password !== expectedPassword) {
+  if (
+    !expectedUsername ||
+    !expectedPassword ||
+    username !== expectedUsername ||
+    password !== expectedPassword
+  ) {
     return pathname.startsWith("/api/") ? apiUnauthorized() : unauthorized();
   }
 
