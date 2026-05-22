@@ -192,18 +192,18 @@ export default function SubscriptionModal({
       />
 
       <div
-        className={`absolute top-1/2 left-1/2 w-[min(720px,calc(100vw-2rem))] -translate-x-1/2 rounded-[20px] border border-outline-variant bg-surface-container-lowest shadow-2xl transition-all duration-300 ${
+        className={`absolute top-1/2 left-1/2 flex max-h-[calc(100svh-2rem)] w-[min(720px,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-hidden rounded-[20px] border border-outline-variant bg-surface-container-lowest shadow-2xl transition-all duration-300 ${
           isOpen
             ? "visible translate-y-[-50%] opacity-100"
             : "invisible translate-y-[-46%] opacity-0"
         }`}
       >
-        <div className="flex items-start justify-between border-b border-surface-container-high px-8 py-6">
+        <div className="flex shrink-0 items-start justify-between border-b border-surface-container-high px-[29px] py-[21px]">
           <div>
             <p className="text-label-md font-medium tracking-[0.18em] text-secondary uppercase">
               {mode === "add" ? "New Entry" : "Update Entry"}
             </p>
-            <h2 className="mt-2 text-[28px] font-semibold tracking-[-0.02em] text-on-surface">
+            <h2 className="mt-2 text-[25px] font-semibold tracking-normal text-on-surface">
               {mode === "add" ? "Add Subscription" : "Edit Subscription"}
             </h2>
             <p className="mt-2 max-w-xl text-body-md text-on-surface-variant">
@@ -220,7 +220,10 @@ export default function SubscriptionModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-8 py-6">
+        <form
+          onSubmit={handleSubmit}
+          className="min-h-0 overflow-y-auto px-[29px] py-[21px]"
+        >
           <div className="grid gap-5 md:grid-cols-2">
             <label className="block">
               <span className="mb-2 block text-label-md font-semibold text-on-surface">
@@ -232,7 +235,7 @@ export default function SubscriptionModal({
                 onChange={handleChange}
                 placeholder="Netflix"
                 required
-                className="h-12 w-full rounded-xl border border-outline-variant bg-surface-container-low px-4 text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low ui-control-pad text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
               />
             </label>
 
@@ -245,7 +248,7 @@ export default function SubscriptionModal({
                 value={formData.subscription}
                 onChange={handleChange}
                 placeholder="Premium Plan"
-                className="h-12 w-full rounded-xl border border-outline-variant bg-surface-container-low px-4 text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low ui-control-pad text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
               />
             </label>
 
@@ -258,7 +261,7 @@ export default function SubscriptionModal({
                 value={formData.due_date}
                 onChange={handleChange}
                 type="date"
-                className="h-12 w-full rounded-xl border border-outline-variant bg-surface-container-low px-4 text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low ui-control-pad text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
               />
               <p className="mt-2 text-label-sm text-secondary">
                 Use this for one-off calendar dates.
@@ -274,7 +277,7 @@ export default function SubscriptionModal({
                 value={formData.due_date_recurring}
                 onChange={handleChange}
                 placeholder="23rd of every month"
-                className="h-12 w-full rounded-xl border border-outline-variant bg-surface-container-low px-4 text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low ui-control-pad text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
               />
               <p className="mt-2 text-label-sm text-secondary">
                 If set, this takes priority over the calendar date.
@@ -304,7 +307,7 @@ export default function SubscriptionModal({
                   }
                   inputMode="decimal"
                   placeholder="39"
-                  className="h-12 w-full rounded-xl border border-outline-variant bg-surface-container-low pr-4 pl-8 text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                  className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low pr-[13px] pl-[29px] text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
                 />
               </div>
             </label>
@@ -319,7 +322,7 @@ export default function SubscriptionModal({
                 value={formData.login_email}
                 onChange={handleChange}
                 placeholder="account@email.com"
-                className="h-12 w-full rounded-xl border border-outline-variant bg-surface-container-low px-4 text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low ui-control-pad text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
               />
             </label>
 
@@ -338,7 +341,7 @@ export default function SubscriptionModal({
                       ? "Leave blank to keep saved password"
                       : "Optional password"
                   }
-                  className="h-12 w-full rounded-xl border border-outline-variant bg-surface-container-low px-4 pr-12 text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                  className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low px-[13px] pr-[45px] text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
                 />
                 <button
                   type="button"
@@ -360,9 +363,10 @@ export default function SubscriptionModal({
                 name="action"
                 value={formData.action}
                 onChange={handleChange}
-                className="h-12 w-full rounded-xl border border-outline-variant bg-surface-container-low px-4 text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low ui-control-pad text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
               >
                 <option value="Renewal">Renewal</option>
+                <option value="PAYG Renewal">PAYG Renewal</option>
                 <option value="Upgrade">Upgrade</option>
                 <option value="Canceled">Canceled</option>
                 <option value="FREE">FREE</option>
@@ -377,7 +381,7 @@ export default function SubscriptionModal({
                 name="payment_status"
                 value={formData.payment_status}
                 onChange={handleChange}
-                className="h-12 w-full rounded-xl border border-outline-variant bg-surface-container-low px-4 text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low ui-control-pad text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
               >
                 <option value="Paid">Paid</option>
                 <option value="Pending">Pending</option>
@@ -387,19 +391,19 @@ export default function SubscriptionModal({
           </div>
 
           {error ? (
-            <div className="mt-5 rounded-xl border border-error/20 bg-error-container px-4 py-3 text-sm text-on-surface">
+            <div className="mt-5 rounded-xl border border-error/20 bg-error-container ui-button-pad-lg text-[11px] text-on-surface">
               {error}
             </div>
           ) : null}
 
-          <div className="mt-8 flex flex-col gap-3 border-t border-surface-container-high pt-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="sticky bottom-0 -mx-[29px] mt-8 flex flex-col gap-3 border-t border-surface-container-high bg-surface-container-lowest px-[29px] pt-5 pb-[21px] sm:flex-row sm:items-center sm:justify-between">
             <div>
               {mode === "edit" ? (
                 <button
                   type="button"
                   onClick={() => setShowDeleteConfirm(true)}
                   disabled={isDeleting}
-                  className="inline-flex items-center gap-2 rounded-xl border border-error/25 bg-error-container px-4 py-3 text-label-md font-semibold text-error transition-colors hover:bg-error-container/80 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-xl border border-error/25 bg-error-container ui-button-pad-lg text-label-md font-semibold text-error transition-colors hover:bg-error-container/80 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <span className="material-symbols-outlined text-[18px]">
                     delete
@@ -407,7 +411,7 @@ export default function SubscriptionModal({
                   {isDeleting ? "Deleting..." : "Delete Subscription"}
                 </button>
               ) : (
-                <span className="text-sm text-secondary">
+                <span className="text-[11px] text-secondary">
                   Secure credentials are stored with this record.
                 </span>
               )}
@@ -417,14 +421,14 @@ export default function SubscriptionModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-xl border border-outline-variant px-5 py-3 text-label-md font-semibold text-secondary transition-colors hover:bg-surface-container-low"
+                className="rounded-xl border border-outline-variant ui-button-pad-lg text-label-md font-semibold text-secondary transition-colors hover:bg-surface-container-low"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSaving}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-label-md font-semibold text-on-primary transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary ui-button-pad-lg text-label-md font-semibold text-on-primary transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSaving ? (
                   <>
@@ -444,12 +448,12 @@ export default function SubscriptionModal({
         </form>
 
         {showDeleteConfirm ? (
-          <div className="absolute inset-0 flex items-center justify-center rounded-[20px] bg-inverse-surface/20 p-6 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-2xl border border-outline-variant bg-surface-container-lowest p-6 shadow-xl">
+          <div className="absolute inset-0 flex items-center justify-center rounded-[20px] bg-inverse-surface/20 p-[21px] backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-2xl border border-outline-variant bg-surface-container-lowest ui-card-pad shadow-xl">
               <p className="text-label-md font-medium tracking-[0.18em] text-error uppercase">
                 Confirm Delete
               </p>
-              <h3 className="mt-2 text-xl font-semibold text-on-surface">
+              <h3 className="mt-2 text-[17px] font-semibold text-on-surface">
                 Delete this subscription?
               </h3>
               <p className="mt-3 text-body-md text-on-surface-variant">
@@ -461,7 +465,7 @@ export default function SubscriptionModal({
                 <button
                   type="button"
                   onClick={() => setShowDeleteConfirm(false)}
-                  className="rounded-xl border border-outline-variant px-4 py-2 text-label-md font-semibold text-secondary transition-colors hover:bg-surface-container-low"
+                  className="rounded-xl border border-outline-variant ui-button-pad text-label-md font-semibold text-secondary transition-colors hover:bg-surface-container-low"
                 >
                   Cancel
                 </button>
@@ -469,7 +473,7 @@ export default function SubscriptionModal({
                   type="button"
                   onClick={handleDelete}
                   disabled={isDeleting}
-                  className="rounded-xl bg-error px-4 py-2 text-label-md font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-xl bg-error ui-button-pad text-label-md font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isDeleting ? "Deleting..." : "Yes, Delete"}
                 </button>

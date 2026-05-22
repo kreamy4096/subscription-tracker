@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:reminder-email": "node scripts/test-reminder-email.mjs"
   },
   "dependencies": {
     "next": "16.2.6",

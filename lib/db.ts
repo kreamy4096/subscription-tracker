@@ -75,6 +75,35 @@ export async function initDb() {
     `);
 
     await activePool.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'subscriptions_action_check'
+            AND conrelid = 'subscriptions'::regclass
+            AND pg_get_constraintdef(oid) NOT LIKE '%PAYG Renewal%'
+        ) THEN
+          ALTER TABLE subscriptions DROP CONSTRAINT subscriptions_action_check;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'subscriptions_action_check'
+            AND conrelid = 'subscriptions'::regclass
+        ) THEN
+          ALTER TABLE subscriptions
+            ADD CONSTRAINT subscriptions_action_check
+            CHECK (
+              action IS NULL
+              OR action IN ('', 'Renewal', 'PAYG Renewal', 'Upgrade', 'Canceled', 'FREE')
+            );
+        END IF;
+      END $$;
+    `);
+
+    await activePool.query(`
       COMMENT ON COLUMN subscriptions.login_password
       IS 'Legacy credential storage column. New credentials are stored encrypted.';
     `);

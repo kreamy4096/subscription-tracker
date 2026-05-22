@@ -91,11 +91,11 @@ export default function ReminderDrawer({
       />
 
       <div
-        className={`absolute top-0 right-0 flex h-full w-[400px] max-w-full flex-col border-l border-outline-variant bg-surface-container-lowest p-8 shadow-xl transition-transform duration-300 ${
+        className={`absolute top-0 right-0 flex h-full w-[400px] max-w-full flex-col border-l border-outline-variant bg-surface-container-lowest p-[29px] shadow-xl transition-transform duration-300 ${
           isOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-[29px] flex items-center justify-between">
           <h3 className="text-title-lg font-title-lg font-semibold text-on-surface">
             Reminder Settings
           </h3>
@@ -109,20 +109,20 @@ export default function ReminderDrawer({
 
         {loading ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 text-secondary">
-            <span className="material-symbols-outlined animate-spin text-3xl">
+            <span className="material-symbols-outlined animate-spin text-[27px]">
               refresh
             </span>
             <p className="text-body-md font-body-md">Loading settings...</p>
           </div>
         ) : (
           <form onSubmit={handleSave} className="flex flex-1 flex-col">
-            <div className="flex-1 space-y-6">
+            <div className="flex-1 space-y-[21px]">
               <div>
                 <label className="mb-2 block text-label-md font-label-md font-bold text-on-surface">
                   Send reminders to email
                 </label>
                 <input
-                  className="text-body-md font-body-md h-11 w-full rounded-lg border border-outline-variant bg-surface-container-low px-4 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                  className="text-body-md font-body-md h-11 w-full rounded-lg border border-outline-variant bg-surface-container-low ui-control-pad outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
                   placeholder="one@email.com, two@email.com"
                   type="text"
                   required
@@ -139,7 +139,7 @@ export default function ReminderDrawer({
                   Remind me X days before due date
                 </label>
                 <input
-                  className="text-body-md font-body-md h-11 w-full rounded-lg border border-outline-variant bg-surface-container-low px-4 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                  className="text-body-md font-body-md h-11 w-full rounded-lg border border-outline-variant bg-surface-container-low ui-control-pad outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
                   type="number"
                   min="1"
                   max="90"
@@ -149,7 +149,7 @@ export default function ReminderDrawer({
                 />
               </div>
 
-              <div className="flex items-center justify-between rounded-xl border border-outline-variant bg-surface-container-lowest p-4">
+              <div className="flex items-center justify-between rounded-xl border border-outline-variant bg-surface-container-lowest ui-panel-pad">
                 <div>
                   <p className="text-label-md font-label-md font-bold text-on-surface">
                     Enable email reminders
@@ -170,11 +170,11 @@ export default function ReminderDrawer({
               </div>
             </div>
 
-            <div className="mt-auto border-t border-surface-container-high bg-surface-container-lowest pt-6">
+            <div className="mt-auto border-t border-surface-container-high bg-surface-container-lowest pt-[21px]">
               <button
                 type="submit"
                 disabled={saving}
-                className="text-label-md font-label-md flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#6366f1] py-3 text-white transition-all hover:bg-opacity-90"
+                className="text-label-md font-label-md flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#6366f1] ui-button-pad-lg text-white transition-all hover:bg-opacity-90"
               >
                 {saving ? (
                   <>

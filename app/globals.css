@@ -65,6 +65,9 @@
   --spacing-gutter: 24px;
   --spacing-margin-mobile: 16px;
   --spacing-margin-desktop: 32px;
+
+  --font-weight-bold: 600;
+  --font-weight-semibold: 600;
 }
 
 body {
@@ -96,4 +99,32 @@ body {
 .hide-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* Design type scale reduced by 3px from the source system. */
+.text-label-sm { @apply text-[8px]/[13px]; }
+.text-label-md { @apply text-[9px]/[13px]; }
+.text-body-md { @apply text-[11px]/[17px]; }
+.text-title-lg { @apply text-[17px]/[25px]; }
+.text-headline-md { @apply text-[21px]/[29px]; }
+.text-headline-lg { @apply text-[29px]/[37px]; }
+.text-headline-lg-mobile { @apply text-[21px]/[29px]; }
+.text-display-lg { @apply text-[45px]/[53px]; }
+
+/* Override bold font weight to 600 */
+.font-bold { font-weight: 600; }
+.font-semibold { font-weight: 600; }
+.font-label-lg { font-weight: 600; }
+.font-label-md { font-weight: 600; }
+.font-title-lg { font-weight: 600; }
+
+@layer components {
+  .ui-card-pad { @apply p-[21px]; }
+  .ui-panel-pad { @apply p-[13px]; }
+  .ui-button-pad { @apply px-[13px] py-[5px]; }
+  .ui-button-pad-lg { @apply px-[17px] py-[9px]; }
+  .ui-control-pad { @apply px-[13px]; }
+  .ui-table-cell { @apply px-[21px] py-[13px]; }
+  .ui-table-empty { @apply px-[21px] py-[45px]; }
+  .ui-badge-pad { @apply px-[11px] py-[3px]; }
 }

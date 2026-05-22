@@ -128,6 +128,8 @@ function isDueThisMonth(value: string | null | undefined) {
 
 function getActionBadgeClasses(action: string) {
   switch (action) {
+    case "PAYG Renewal":
+      return "bg-primary-fixed text-on-primary-fixed-variant";
     case "Upgrade":
       return "bg-secondary-container text-on-secondary-container";
     case "FREE":
@@ -351,7 +353,7 @@ export default function Home() {
   return (
     <>
       <aside className="fixed top-0 left-0 z-50 hidden h-screen w-[240px] flex-col border-r border-surface-container-high bg-surface lg:flex">
-        <div className="px-6 py-8">
+        <div className="px-[21px] py-[29px]">
           <h1 className="text-headline-md font-headline-md font-bold text-primary">
             SubTrack Pro
           </h1>
@@ -373,7 +375,7 @@ export default function Home() {
             <button
               key={item.label}
               type="button"
-              className={`flex w-full items-center gap-3 px-6 py-3 text-left transition-colors duration-200 ${
+              className={`flex w-full items-center gap-3 px-[21px] py-[9px] text-left transition-colors duration-200 ${
                 item.active
                   ? "border-r-2 border-primary font-bold text-primary"
                   : "text-secondary hover:bg-surface-container-low"
@@ -385,11 +387,11 @@ export default function Home() {
           ))}
         </nav>
 
-        <div className="border-t border-surface-container-high p-4">
+        <div className="border-t border-surface-container-high ui-panel-pad">
           <button
             type="button"
             onClick={handleOpenAdd}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-label-md text-on-primary transition-opacity hover:opacity-90"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary ui-button-pad-lg text-label-md text-on-primary transition-opacity hover:opacity-90"
           >
             <span className="material-symbols-outlined text-[20px]">add</span>
             Add Subscription
@@ -401,7 +403,7 @@ export default function Home() {
             <button
               key={item.label}
               type="button"
-              className="flex w-full items-center gap-3 px-6 py-3 text-left text-secondary transition-colors duration-200 hover:bg-surface-container-low"
+              className="flex w-full items-center gap-3 px-[21px] py-[9px] text-left text-secondary transition-colors duration-200 hover:bg-surface-container-low"
             >
               <span className="material-symbols-outlined">{item.icon}</span>
               <span className="text-label-md">{item.label}</span>
@@ -410,8 +412,8 @@ export default function Home() {
         </div>
       </aside>
 
-      <main className="min-h-screen px-4 py-6 sm:px-6 lg:ml-[240px] lg:p-[32px]">
-        <header className="mb-gutter flex flex-col gap-5 rounded-[20px] border border-white/50 bg-white/70 px-6 py-6 shadow-sm backdrop-blur-sm lg:flex-row lg:items-center lg:justify-between">
+      <main className="min-h-screen px-[13px] py-[21px] sm:px-[21px] lg:ml-[240px] lg:p-[29px]">
+        <header className="mb-gutter flex flex-col gap-5 rounded-[20px] border border-white/50 bg-white/70 p-[21px] shadow-sm backdrop-blur-sm lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-label-md font-medium tracking-[0.18em] text-secondary uppercase lg:hidden">
               SubTrack Pro
@@ -428,7 +430,7 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setIsDrawerOpen(true)}
-              className="flex items-center gap-2 rounded-xl border border-outline-variant px-4 py-2 text-label-md text-secondary transition-colors hover:bg-surface-container-low"
+              className="flex items-center gap-2 rounded-xl border border-outline-variant ui-button-pad text-label-md text-secondary transition-colors hover:bg-surface-container-low"
             >
               <span className="material-symbols-outlined text-[18px]">settings</span>
               Reminder Settings
@@ -436,7 +438,7 @@ export default function Home() {
             <button
               type="button"
               onClick={handleOpenAdd}
-              className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-label-md text-on-primary transition-opacity hover:opacity-90 lg:hidden"
+              className="flex items-center gap-2 rounded-xl bg-primary ui-button-pad text-label-md text-on-primary transition-opacity hover:opacity-90 lg:hidden"
             >
               <span className="material-symbols-outlined text-[18px]">add</span>
               Add Subscription
@@ -449,22 +451,22 @@ export default function Home() {
                 settings
               </span>
             </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-surface-container-high bg-surface-container-low text-sm font-semibold text-primary">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-surface-container-high bg-surface-container-low text-[11px] font-semibold text-primary">
               AA
             </div>
           </div>
         </header>
 
         {error ? (
-          <div className="mb-6 rounded-xl border border-warning/20 bg-tertiary-fixed px-4 py-3 text-sm text-on-surface">
+          <div className="mb-6 rounded-xl border border-warning/20 bg-tertiary-fixed ui-button-pad-lg text-[11px] text-on-surface">
             {error}
           </div>
         ) : null}
 
         <section className="mb-gutter grid grid-cols-1 gap-gutter md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-xl border border-outline-variant bg-surface-container-lowest p-6 transition-all hover:border-primary">
+          <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-card-pad transition-all hover:border-primary">
             <div className="mb-4 flex items-start justify-between">
-              <span className="material-symbols-outlined rounded-lg bg-primary-fixed p-2 text-primary">
+              <span className="material-symbols-outlined rounded-lg bg-primary-fixed p-[5px] text-primary">
                 account_balance_wallet
               </span>
               <span className="text-label-sm text-success">Live total</span>
@@ -477,9 +479,9 @@ export default function Home() {
             </h3>
           </div>
 
-          <div className="rounded-xl border border-outline-variant bg-surface-container-lowest p-6 transition-all hover:border-primary">
+          <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-card-pad transition-all hover:border-primary">
             <div className="mb-4 flex items-start justify-between">
-              <span className="material-symbols-outlined rounded-lg bg-secondary-container p-2 text-hunter-cyan">
+              <span className="material-symbols-outlined rounded-lg bg-secondary-container p-[5px] text-hunter-cyan">
                 subscriptions
               </span>
             </div>
@@ -491,9 +493,9 @@ export default function Home() {
             </h3>
           </div>
 
-          <div className="rounded-xl border border-outline-variant bg-surface-container-lowest p-6 transition-all hover:border-error">
+          <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-card-pad transition-all hover:border-error">
             <div className="mb-4 flex items-start justify-between">
-              <span className="material-symbols-outlined rounded-lg bg-error-container p-2 text-error">
+              <span className="material-symbols-outlined rounded-lg bg-error-container p-[5px] text-error">
                 pending_actions
               </span>
             </div>
@@ -505,9 +507,9 @@ export default function Home() {
             </h3>
           </div>
 
-          <div className="rounded-xl border border-outline-variant bg-surface-container-lowest p-6 transition-all hover:border-warning">
+          <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-card-pad transition-all hover:border-warning">
             <div className="mb-4 flex items-start justify-between">
-              <span className="material-symbols-outlined rounded-lg bg-tertiary-fixed p-2 text-warning">
+              <span className="material-symbols-outlined rounded-lg bg-tertiary-fixed p-[5px] text-warning">
                 event_upcoming
               </span>
             </div>
@@ -520,7 +522,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="flex flex-wrap items-center gap-4 rounded-xl border border-outline-variant bg-surface-container-lowest p-4">
+        <section className="flex flex-wrap items-center gap-4 rounded-xl border border-outline-variant bg-surface-container-lowest ui-panel-pad">
           <div className="relative min-w-[280px] flex-1">
             <span className="material-symbols-outlined absolute top-1/2 left-3 -translate-y-1/2 text-secondary">
               search
@@ -529,14 +531,14 @@ export default function Home() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search tools..."
-              className="h-11 w-full rounded-lg border border-outline-variant bg-surface-container-low pr-4 pl-10 text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+              className="h-11 w-full rounded-lg border border-outline-variant bg-surface-container-low pr-[13px] pl-[37px] text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
             />
           </div>
 
           <select
             value={paymentFilter}
             onChange={(event) => setPaymentFilter(event.target.value)}
-            className="h-11 rounded-lg border border-outline-variant bg-surface-container-low px-4 text-body-md text-on-surface-variant outline-none"
+            className="h-11 rounded-lg border border-outline-variant bg-surface-container-low ui-control-pad text-body-md text-on-surface-variant outline-none"
           >
             <option value="All">Payment Status: All</option>
             <option value="Paid">Paid</option>
@@ -547,10 +549,11 @@ export default function Home() {
           <select
             value={actionFilter}
             onChange={(event) => setActionFilter(event.target.value)}
-            className="h-11 rounded-lg border border-outline-variant bg-surface-container-low px-4 text-body-md text-on-surface-variant outline-none"
+            className="h-11 rounded-lg border border-outline-variant bg-surface-container-low ui-control-pad text-body-md text-on-surface-variant outline-none"
           >
             <option value="All">Action: All</option>
             <option value="Renewal">Renewal</option>
+            <option value="PAYG Renewal">PAYG Renewal</option>
             <option value="Upgrade">Upgrade</option>
             <option value="Canceled">Canceled</option>
             <option value="FREE">FREE</option>
@@ -559,7 +562,7 @@ export default function Home() {
           <button
             type="button"
             onClick={handleOpenAdd}
-            className="hidden items-center gap-2 rounded-lg bg-primary px-6 py-2 text-label-md text-on-primary transition-opacity hover:opacity-90 sm:flex"
+            className="hidden items-center gap-2 rounded-lg bg-primary ui-button-pad-lg text-label-md text-on-primary transition-opacity hover:opacity-90 sm:flex"
           >
             <span className="material-symbols-outlined text-[18px]">add</span>
             Add Subscription
@@ -583,7 +586,7 @@ export default function Home() {
                   ].map((heading) => (
                     <th
                       key={heading}
-                      className={`px-6 py-4 text-label-md tracking-wider text-secondary uppercase ${
+                      className={`ui-table-cell text-label-md tracking-wider text-secondary uppercase ${
                         heading === "Edit" ? "text-right" : ""
                       }`}
                     >
@@ -595,13 +598,13 @@ export default function Home() {
               <tbody className="divide-y divide-surface-container-high">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-12 text-center text-secondary">
+                    <td colSpan={8} className="ui-table-empty text-center text-secondary">
                       Loading subscriptions...
                     </td>
                   </tr>
                 ) : filteredSubscriptions.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-12 text-center text-secondary">
+                    <td colSpan={8} className="ui-table-empty text-center text-secondary">
                       No subscriptions match your filters yet.
                     </td>
                   </tr>
@@ -611,28 +614,30 @@ export default function Home() {
                       key={item.id}
                       className="group transition-colors hover:bg-surface-container-low"
                     >
-                      <td className="px-6 py-4">
+                      <td className="ui-table-cell">
                         <div className="flex items-center gap-3">
                           <div
-                            className={`flex h-11 w-11 items-center justify-center rounded-xl text-sm font-semibold ${getAvatarClasses(item.tool)}`}
+                            className={`flex h-10 w-10 items-center justify-center rounded-xl text-[11px] font-semibold ${getAvatarClasses(item.tool)}`}
                           >
                             {item.tool.slice(0, 1).toUpperCase()}
                           </div>
                           <div>
-                            <p className="font-semibold text-on-surface">{item.tool}</p>
+                            <p className="text-body-md font-semibold text-on-surface">
+                              {item.tool}
+                            </p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-body-md text-on-surface-variant">
+                      <td className="ui-table-cell text-body-md text-on-surface-variant">
                         {item.subscription || "-"}
                       </td>
-                      <td className="px-6 py-4 text-body-md text-on-surface-variant">
+                      <td className="ui-table-cell text-body-md text-on-surface-variant">
                         {formatDueDate(item.due_date)}
                       </td>
-                      <td className="px-6 py-4 font-semibold text-on-surface">
+                      <td className="ui-table-cell text-body-md font-semibold text-on-surface">
                         {item.price || "-"}
                       </td>
-                      <td className="relative px-6 py-4">
+                      <td className="relative ui-table-cell">
                         <button
                           type="button"
                           onClick={() => toggleCredentialsPopover(item.id)}
@@ -647,7 +652,7 @@ export default function Home() {
                         {openCredentialsId === item.id ? (
                           <div
                             ref={credentialsPopoverRef}
-                            className="absolute top-[calc(100%-8px)] left-0 z-20 w-[320px] rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-[0_18px_42px_rgba(25,28,29,0.12)]"
+                            className="absolute top-[calc(100%-8px)] left-0 z-20 w-[320px] rounded-2xl border border-outline-variant bg-surface-container-lowest ui-panel-pad shadow-[0_18px_42px_rgba(25,28,29,0.12)]"
                           >
                             <div className="mb-3 flex items-center gap-2 text-primary">
                               <span className="material-symbols-outlined text-[18px]">
@@ -663,7 +668,7 @@ export default function Home() {
                                 <p className="mb-2 text-label-md font-semibold text-on-surface">
                                   Login Email
                                 </p>
-                                <div className="rounded-xl border border-outline-variant bg-surface-container-low px-4 py-3 text-body-md text-on-surface">
+                                <div className="rounded-xl border border-outline-variant bg-surface-container-low ui-button-pad-lg text-body-md text-on-surface">
                                   {item.login_email || "-"}
                                 </div>
                               </div>
@@ -673,7 +678,7 @@ export default function Home() {
                                   Password
                                 </p>
                                 <div className="flex items-center overflow-hidden rounded-xl border border-outline-variant bg-surface-container-low">
-                                  <div className="flex-1 px-4 py-3 text-body-md text-on-surface">
+                                  <div className="flex-1 ui-button-pad-lg text-body-md text-on-surface">
                                     {item.login_password
                                       ? popoverPasswordVisible
                                         ? item.login_password
@@ -685,7 +690,7 @@ export default function Home() {
                                     onClick={() =>
                                       setPopoverPasswordVisible((current) => !current)
                                     }
-                                    className="border-l border-outline-variant px-3 py-3 text-secondary transition-colors hover:bg-surface-container-high hover:text-on-surface"
+                                    className="border-l border-outline-variant px-[9px] py-[9px] text-secondary transition-colors hover:bg-surface-container-high hover:text-on-surface"
                                     aria-label={
                                       popoverPasswordVisible
                                         ? "Hide password"
@@ -704,21 +709,21 @@ export default function Home() {
                           </div>
                         ) : null}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="ui-table-cell">
                         <span
-                          className={`inline-flex rounded-full px-3 py-1 text-label-sm font-semibold ${getActionBadgeClasses(item.action)}`}
+                          className={`inline-flex rounded-full ui-badge-pad text-label-sm font-semibold ${getActionBadgeClasses(item.action)}`}
                         >
                           {item.action || "-"}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="ui-table-cell">
                         <select
                           value={item.payment_status || "Not Paid"}
                           disabled={statusSavingId === item.id}
                           onChange={(event) =>
                             void handleStatusChange(item, event.target.value)
                           }
-                          className={`rounded-full border px-3 py-1 text-label-sm font-semibold outline-none transition-colors ${getStatusBadgeClasses(
+                          className={`rounded-full border ui-badge-pad text-label-sm font-semibold outline-none transition-colors ${getStatusBadgeClasses(
                             item.payment_status || "Not Paid",
                           )} ${
                             statusSavingId === item.id
@@ -731,7 +736,7 @@ export default function Home() {
                           <option value="Not Paid">Not Paid</option>
                         </select>
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="ui-table-cell text-right">
                         <button
                           type="button"
                           onClick={() => handleOpenEdit(item)}

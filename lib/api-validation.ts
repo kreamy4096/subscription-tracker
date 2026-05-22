@@ -17,7 +17,14 @@ export interface ReminderSettingsInput {
   enabled: boolean;
 }
 
-const actions = new Set(["Renewal", "Upgrade", "Canceled", "FREE", ""]);
+const actions = new Set([
+  "Renewal",
+  "PAYG Renewal",
+  "Upgrade",
+  "Canceled",
+  "FREE",
+  "",
+]);
 const paymentStatuses = new Set(["Paid", "Pending", "Not Paid", ""]);
 
 function cleanString(value: unknown, maxLength: number) {
