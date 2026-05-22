@@ -157,8 +157,11 @@ export function requireBasicAuth(request: Request) {
 }
 
 export function hasValidCronSecret(request: Request) {
-  const cronSecret = process.env.REMINDER_CRON_SECRET;
-  if (!cronSecret) {
+  const cronSecrets = [
+    process.env.CRON_SECRET,
+    process.env.REMINDER_CRON_SECRET,
+  ].filter((value): value is string => Boolean(value));
+  if (cronSecrets.length === 0) {
     return false;
   }
 
@@ -167,5 +170,8 @@ export function hasValidCronSecret(request: Request) {
     ? authorization.slice("Bearer ".length)
     : request.headers.get("x-cron-secret");
 
-  return typeof token === "string" && safeEqual(token, cronSecret);
+  return (
+    typeof token === "string" &&
+    cronSecrets.some((cronSecret) => safeEqual(token, cronSecret))
+  );
 }

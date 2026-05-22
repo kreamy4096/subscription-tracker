@@ -101,6 +101,22 @@ body {
   scrollbar-width: none;
 }
 
+@keyframes toast-slide-in {
+  from {
+    opacity: 0;
+    transform: translate(-16px, 16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+}
+
+.toast-slide-in {
+  animation: toast-slide-in 220ms ease-out both;
+}
+
 /* Design type scale reduced by 3px from the source system. */
 .text-label-sm { @apply text-[8px]/[13px]; }
 .text-label-md { @apply text-[9px]/[13px]; }

@@ -11,6 +11,11 @@ interface ReminderSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave?: (settings: ReminderSettings) => void;
+  onNotify?: (message: {
+    title: string;
+    description?: string;
+    tone?: "success" | "error" | "info";
+  }) => void;
 }
 
 type RecipientDraft = Pick<
@@ -110,6 +115,7 @@ export default function ReminderSettingsModal({
   isOpen,
   onClose,
   onSave,
+  onNotify,
 }: ReminderSettingsModalProps) {
   const [groups, setGroups] = useState<GroupDraft[]>([]);
   const [activeGroupId, setActiveGroupId] = useState("");
@@ -144,6 +150,11 @@ export default function ReminderSettingsModal({
 
         if (!res.ok) {
           setError(data.error || "Unable to load reminder settings.");
+          onNotify?.({
+            title: "Reminder settings not loaded",
+            description: data.error || "Unable to load reminder settings.",
+            tone: "error",
+          });
           return;
         }
 
@@ -155,13 +166,18 @@ export default function ReminderSettingsModal({
       } catch (err) {
         console.error("Failed to load reminder settings:", err);
         setError("A network error occurred while loading settings.");
+        onNotify?.({
+          title: "Reminder settings not loaded",
+          description: "A network error occurred while loading settings.",
+          tone: "error",
+        });
       } finally {
         setLoading(false);
       }
     };
 
     void fetchSettings();
-  }, [isOpen]);
+  }, [isOpen, onNotify]);
 
   const updateActiveGroup = (updater: (group: GroupDraft) => GroupDraft) => {
     setGroups((current) =>
@@ -182,6 +198,11 @@ export default function ReminderSettingsModal({
     setGroups((current) => [...current, nextGroup]);
     setActiveGroupId(nextGroup.id);
     setError("");
+    onNotify?.({
+      title: "Reminder group added",
+      description: `${nextGroup.name} is ready to configure.`,
+      tone: "success",
+    });
   };
 
   const handleDeleteGroup = () => {
@@ -192,6 +213,11 @@ export default function ReminderSettingsModal({
     const nextGroups = groups.filter((group) => group.id !== activeGroup.id);
     setGroups(nextGroups);
     setActiveGroupId(nextGroups[0]?.id || "");
+    onNotify?.({
+      title: "Reminder group deleted",
+      description: `${activeGroup.name} was removed.`,
+      tone: "success",
+    });
   };
 
   const handleAddRecipient = () => {
@@ -206,6 +232,11 @@ export default function ReminderSettingsModal({
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setError("Enter a valid email address.");
+      onNotify?.({
+        title: "Email not added",
+        description: "Enter a valid email address.",
+        tone: "error",
+      });
       return;
     }
 
@@ -215,6 +246,11 @@ export default function ReminderSettingsModal({
       )
     ) {
       setError("That email is already in this group.");
+      onNotify?.({
+        title: "Email not added",
+        description: "That email is already in this group.",
+        tone: "error",
+      });
       return;
     }
 
@@ -244,18 +280,31 @@ export default function ReminderSettingsModal({
     setNewEmail("");
     setAddAsPrimary(false);
     setError("");
+    onNotify?.({
+      title: "Email added",
+      description: `${email} was added to ${activeGroup.name}.`,
+      tone: "success",
+    });
   };
 
   const handleHardDeleteRecipient = (id: string) => {
+    const recipient = activeGroup?.recipients.find((item) => item.id === id);
     updateActiveGroup((group) => ({
       ...group,
       recipients: ensurePrimary(
         group.recipients.filter((recipient) => recipient.id !== id),
       ),
     }));
+    onNotify?.({
+      title: "Email deleted",
+      description: `${recipient?.email || "Recipient"} was removed.`,
+      tone: "success",
+    });
   };
 
   const handleToggleActive = (id: string) => {
+    const recipient = activeGroup?.recipients.find((item) => item.id === id);
+    const nextActive = !recipient?.is_active;
     updateActiveGroup((group) => ({
       ...group,
       recipients: ensurePrimary(
@@ -270,9 +319,17 @@ export default function ReminderSettingsModal({
         ),
       ),
     }));
+    onNotify?.({
+      title: nextActive ? "Email activated" : "Email inactivated",
+      description: `${recipient?.email || "Recipient"} ${
+        nextActive ? "will receive reminders." : "will not receive reminders."
+      }`,
+      tone: "info",
+    });
   };
 
   const handleSetPrimary = (id: string) => {
+    const recipient = activeGroup?.recipients.find((item) => item.id === id);
     updateActiveGroup((group) => ({
       ...group,
       recipients: group.recipients.map((recipient) => ({
@@ -282,6 +339,11 @@ export default function ReminderSettingsModal({
         is_primary: recipient.id === id,
       })),
     }));
+    onNotify?.({
+      title: "Primary recipient updated",
+      description: `${recipient?.email || "Recipient"} is now the To address.`,
+      tone: "success",
+    });
   };
 
   const handleDropRecipient = (targetId: string) => {
@@ -306,6 +368,11 @@ export default function ReminderSettingsModal({
       recipients: ensurePrimary(moveItem(group.recipients, fromIndex, toIndex)),
     }));
     setDraggedRecipientId(null);
+    onNotify?.({
+      title: "Recipient order updated",
+      description: "The CC order was changed.",
+      tone: "info",
+    });
   };
 
   const handleSave = async (event: React.FormEvent) => {
@@ -323,14 +390,29 @@ export default function ReminderSettingsModal({
 
       if (!res.ok) {
         setError(data.error || "Failed to save reminder settings.");
+        onNotify?.({
+          title: "Reminder settings not saved",
+          description: data.error || "Review the recipient settings and try again.",
+          tone: "error",
+        });
         return;
       }
 
       onSave?.(data);
+      onNotify?.({
+        title: "Reminder settings saved",
+        description: "Recipient groups and reminder timing were updated.",
+        tone: "success",
+      });
       onClose();
     } catch (err) {
       console.error("Failed to save reminder settings:", err);
       setError("A network error occurred while saving settings.");
+      onNotify?.({
+        title: "Reminder settings not saved",
+        description: "A network error occurred while saving.",
+        tone: "error",
+      });
     } finally {
       setSaving(false);
     }

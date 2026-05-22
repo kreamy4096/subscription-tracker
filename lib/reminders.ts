@@ -68,6 +68,9 @@ function normalizeSubscription(
     tool: item.tool ?? "",
     subscription: item.subscription ?? "",
     due_date: item.due_date ?? "",
+    billing_type: item.billing_type ?? "one_time",
+    recurrence_day: item.recurrence_day ?? null,
+    next_due_date: item.next_due_date ?? item.due_date ?? "",
     price: item.price ?? "",
     login_email: item.login_email ?? "",
     has_login_password: item.has_login_password ?? false,
@@ -89,12 +92,6 @@ function escapeHtml(value: string) {
 function startOfDay(value: Date) {
   const copy = new Date(value);
   copy.setHours(0, 0, 0, 0);
-  return copy;
-}
-
-function addMonths(value: Date, count: number) {
-  const copy = new Date(value);
-  copy.setMonth(copy.getMonth() + count);
   return copy;
 }
 
@@ -140,19 +137,7 @@ function getMonthlyRecurringDaysUntilDue(dueDay: number, now: Date) {
     return diffInDays(today, currentCandidate);
   }
 
-  const nextMonthDate = addMonths(today, 1);
-  const nextMonthMaxDay = new Date(
-    nextMonthDate.getFullYear(),
-    nextMonthDate.getMonth() + 1,
-    0,
-  ).getDate();
-  const nextCandidate = new Date(
-    nextMonthDate.getFullYear(),
-    nextMonthDate.getMonth(),
-    Math.min(dueDay, nextMonthMaxDay),
-  );
-
-  return diffInDays(today, nextCandidate);
+  return diffInDays(today, currentCandidate);
 }
 
 function getDaysUntilDue(dueDate: string, now: Date) {
@@ -251,7 +236,7 @@ async function getReminderGroups() {
 
 async function getUnpaidSubscriptions() {
   const result = await query(
-    `SELECT id, tool, subscription, due_date, price, login_email, action, payment_status, created_at
+    `SELECT id, tool, subscription, due_date, billing_type, recurrence_day, next_due_date, price, login_email, action, payment_status, created_at
      FROM subscriptions
      WHERE COALESCE(payment_status, '') != 'Paid'
      ORDER BY created_at DESC`,
@@ -362,7 +347,7 @@ function buildReminderEmail(subscriptions: Subscription[]) {
                 </td>
                 <td width="118" align="right" valign="top">
                   <div class="amount-text" style="font-size:17px;line-height:24px;color:#ffffff;font-weight:700;">${escapeHtml(item.price || "-")}</div>
-                  <div class="small-muted" style="font-size:12px;line-height:18px;color:#b6c6de;">${escapeHtml(formatReminderDate(item.due_date))}</div>
+                  <div class="small-muted" style="font-size:12px;line-height:18px;color:#b6c6de;">${escapeHtml(formatReminderDate(item.next_due_date || item.due_date))}</div>
                 </td>
               </tr>
             </table>
@@ -433,7 +418,7 @@ function buildReminderEmail(subscriptions: Subscription[]) {
                     <tr>
                       <td style="padding:14px 20px 22px;">
                         <div class="detail-label" style="font-size:14px;line-height:21px;color:#b6c6de;">Renewal date</div>
-                        <div class="detail-value" style="margin-top:5px;font-size:22px;line-height:30px;font-weight:800;color:#ffffff;">${escapeHtml(formatReminderDate(primarySubscription?.due_date))}</div>
+                        <div class="detail-value" style="margin-top:5px;font-size:22px;line-height:30px;font-weight:800;color:#ffffff;">${escapeHtml(formatReminderDate(primarySubscription?.next_due_date || primarySubscription?.due_date))}</div>
                       </td>
                       <td width="1" style="background:rgba(182,198,222,0.45);"></td>
                       <td style="padding:14px 20px 22px;">
@@ -529,16 +514,26 @@ async function sendZohoReminderEmail(
 
 export async function sendDueReminders() {
   const groups = await getReminderGroups();
+  const skipped = {
+    disabledGroups: 0,
+    groupsWithoutRecipients: 0,
+    groupsWithoutDueSubscriptions: 0,
+    subscriptionsOutsideWindow: 0,
+    subscriptionsWithInvalidDates: 0,
+  };
+
   if (groups.length === 0) {
-    return { sent: 0 };
+    return { sent: 0, emailsSent: 0, skipped };
   }
 
   const now = new Date();
   const subscriptions = await getUnpaidSubscriptions();
   let sent = 0;
+  let emailsSent = 0;
 
   for (const group of groups) {
     if (!group.enabled) {
+      skipped.disabledGroups += 1;
       continue;
     }
 
@@ -548,6 +543,7 @@ export async function sendDueReminders() {
       .filter(Boolean);
 
     if (recipientEmails.length === 0) {
+      skipped.groupsWithoutRecipients += 1;
       continue;
     }
 
@@ -557,21 +553,30 @@ export async function sendDueReminders() {
     const ccEmails = recipientEmails.filter((email) => email !== primaryEmail);
 
     const dueSoon = subscriptions.filter((item) => {
-      const daysUntilDue = getDaysUntilDue(item.due_date, now);
-      return (
-        daysUntilDue !== null &&
-        daysUntilDue >= 0 &&
-        daysUntilDue <= group.daysBefore
-      );
+      const trackableDueDate = item.next_due_date || item.due_date;
+      const daysUntilDue = getDaysUntilDue(trackableDueDate, now);
+      if (daysUntilDue === null) {
+        skipped.subscriptionsWithInvalidDates += 1;
+        return false;
+      }
+
+      if (daysUntilDue > group.daysBefore) {
+        skipped.subscriptionsOutsideWindow += 1;
+        return false;
+      }
+
+      return true;
     });
 
     if (dueSoon.length === 0) {
+      skipped.groupsWithoutDueSubscriptions += 1;
       continue;
     }
 
     await sendZohoReminderEmail(primaryEmail, ccEmails, dueSoon);
     sent += dueSoon.length;
+    emailsSent += 1;
   }
 
-  return { sent };
+  return { sent, emailsSent, skipped };
 }

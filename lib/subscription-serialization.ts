@@ -2,19 +2,28 @@ import { decrypt as decryptLegacyPassword } from "@/lib/crypto";
 import { decryptCredential } from "@/lib/credentials";
 import type { Subscription } from "@/lib/subscription-types";
 
-type SubscriptionRow = Partial<Subscription> & {
+type SubscriptionRow = Omit<Partial<Subscription>, "next_due_date"> & {
   id: string;
+  next_due_date?: string | Date | null;
   login_password_ciphertext?: string | null;
   login_password_iv?: string | null;
   login_password_tag?: string | null;
 };
 
 export function serializeSubscriptionRow(row: SubscriptionRow): Subscription {
+  const nextDueDate =
+    row.next_due_date instanceof Date
+      ? row.next_due_date.toISOString().slice(0, 10)
+      : row.next_due_date;
+
   return {
     id: row.id,
     tool: row.tool ?? "",
     subscription: row.subscription ?? "",
     due_date: row.due_date ?? "",
+    billing_type: row.billing_type ?? "one_time",
+    recurrence_day: row.recurrence_day ?? null,
+    next_due_date: nextDueDate ?? row.due_date ?? "",
     price: row.price ?? "",
     login_email: row.login_email ?? "",
     login_password: decryptPasswordSafely(row),

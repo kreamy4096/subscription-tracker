@@ -1,9 +1,14 @@
 import "server-only";
 
+import { isValidDateInput } from "@/lib/subscription-dates";
+
 export interface SubscriptionInput {
   tool: string;
   subscription: string;
   due_date: string;
+  billing_type: "one_time" | "monthly" | "yearly";
+  recurrence_day: number | null;
+  next_due_date: string;
   price: string;
   login_email: string;
   login_password: string;
@@ -40,6 +45,7 @@ const actions = new Set([
   "",
 ]);
 const paymentStatuses = new Set(["Paid", "Pending", "Not Paid", ""]);
+const billingTypes = new Set(["one_time", "monthly", "yearly"]);
 
 function cleanString(value: unknown, maxLength: number) {
   if (typeof value !== "string") {
@@ -63,6 +69,11 @@ export function parseSubscriptionInput(value: unknown) {
     tool: cleanString(input.tool, 120),
     subscription: cleanString(input.subscription, 120),
     due_date: cleanString(input.due_date, 80),
+    billing_type: billingTypes.has(String(input.billing_type))
+      ? (String(input.billing_type) as SubscriptionInput["billing_type"])
+      : "one_time",
+    recurrence_day: null,
+    next_due_date: cleanString(input.next_due_date, 10),
     price: cleanString(input.price, 40),
     login_email: cleanString(input.login_email, 254),
     login_password: cleanString(input.login_password, 512),
@@ -72,6 +83,22 @@ export function parseSubscriptionInput(value: unknown) {
 
   if (!parsed.tool) {
     return { error: "Tool name is required" };
+  }
+
+  if (!parsed.next_due_date) {
+    parsed.next_due_date = parsed.due_date;
+  }
+
+  if (parsed.next_due_date && !isValidDateInput(parsed.next_due_date)) {
+    return { error: "Next due date must be a valid calendar date" };
+  }
+
+  if (parsed.billing_type !== "one_time") {
+    if (!parsed.next_due_date) {
+      return { error: "Recurring subscriptions need a next due date" };
+    }
+
+    parsed.recurrence_day = Number.parseInt(parsed.next_due_date.slice(8, 10), 10);
   }
 
   if (parsed.login_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(parsed.login_email)) {

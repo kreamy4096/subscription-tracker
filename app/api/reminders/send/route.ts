@@ -13,8 +13,10 @@ async function handleSend(request: Request) {
   }
 
   try {
+    console.log("SubTrack Pro reminder scan started.");
     const result = await sendDueReminders();
-    return NextResponse.json({ success: true, sent: result.sent });
+    console.log("SubTrack Pro reminder scan completed.", result);
+    return NextResponse.json({ success: true, ...result });
   } catch (error: unknown) {
     console.error("API Error in POST /api/reminders/send:", error);
     return NextResponse.json(
@@ -24,8 +26,8 @@ async function handleSend(request: Request) {
   }
 }
 
-export async function GET() {
-  return NextResponse.json({ error: "Method Not Allowed" }, { status: 405 });
+export async function GET(request: Request) {
+  return handleSend(request);
 }
 
 export async function POST(request: Request) {

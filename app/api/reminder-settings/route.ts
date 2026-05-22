@@ -14,6 +14,15 @@ interface ReminderRecipientRow {
   updated_at?: string;
 }
 
+function isUuid(value: string | undefined) {
+  return Boolean(
+    value &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        value,
+      ),
+  );
+}
+
 async function ensureDefaultReminderGroup() {
   const result = await query(
     "SELECT id FROM reminder_groups ORDER BY created_at ASC LIMIT 1",
@@ -148,7 +157,7 @@ export async function POST(request: Request) {
 
       for (const group of parsed.data.groups) {
         let groupId = group.id;
-        if (groupId && !groupId.startsWith("draft-")) {
+        if (isUuid(groupId)) {
           const updateResult = await client.query(
             `UPDATE reminder_groups SET
               name = $1,
@@ -187,7 +196,7 @@ export async function POST(request: Request) {
         const savedRecipientIds: string[] = [];
         for (const recipient of group.recipients) {
           let recipientId = recipient.id;
-          if (recipientId && !recipientId.startsWith("draft-")) {
+        if (isUuid(recipientId)) {
             const updateResult = await client.query(
               `UPDATE reminder_recipients SET
                 email = $1,

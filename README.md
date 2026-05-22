@@ -29,6 +29,7 @@ SUBTRACK_ADMIN_PASSWORD=
 CREDENTIAL_ENCRYPTION_KEY=
 AUTH_SESSION_SECRET=
 REMINDER_CRON_SECRET=
+CRON_SECRET=
 ZOHO_CLIENT_ID=
 ZOHO_CLIENT_SECRET=
 ZOHO_REFRESH_TOKEN=
@@ -41,8 +42,10 @@ This app is a full Next.js server app, not static hosting.
 
 Whoever deploys it should:
 
-1. Deploy it to a platform that supports a long-running Node.js process if using the in-app `node-cron` scheduler as-is.
+1. Use the included Vercel Cron config for once-daily production reminders, or deploy to a platform that supports a long-running Node.js process if using the in-app `node-cron` scheduler as-is.
 2. Set all required environment variables listed above.
+   - On Vercel, set `CRON_SECRET` so Vercel sends `Authorization: Bearer <CRON_SECRET>` to the cron route.
+   - `REMINDER_CRON_SECRET` is still supported for manual or third-party cron calls.
 3. Confirm the database is reachable from the deployed environment.
 4. Verify the manual reminder route works with Basic Auth or a cron bearer token:
 
@@ -53,13 +56,13 @@ POST /api/reminders/send
 For scheduled jobs, send:
 
 ```text
-Authorization: Bearer <REMINDER_CRON_SECRET>
+Authorization: Bearer <CRON_SECRET>
 ```
 
 Expected success response:
 
 ```json
-{ "success": true, "sent": 0 }
+{ "success": true, "sent": 0, "emailsSent": 0, "skipped": {} }
 ```
 
 or:
@@ -69,6 +72,8 @@ or:
 ```
 
 where `N` is the number of due subscriptions included in the reminder email.
+
+The included `vercel.json` runs `/api/reminders/send` at `0 7 * * *`, which is 8:00 AM in Africa/Lagos.
 
 ## Notes
 

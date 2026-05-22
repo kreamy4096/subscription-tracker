@@ -55,6 +55,9 @@ export async function initDb() {
         tool TEXT NOT NULL,
         subscription TEXT,
         due_date TEXT,
+        billing_type TEXT DEFAULT 'one_time',
+        recurrence_day INTEGER,
+        next_due_date DATE,
         price TEXT,
         login_email TEXT,
         login_password TEXT,
@@ -71,7 +74,25 @@ export async function initDb() {
       ALTER TABLE subscriptions
         ADD COLUMN IF NOT EXISTS login_password_ciphertext TEXT,
         ADD COLUMN IF NOT EXISTS login_password_iv TEXT,
-        ADD COLUMN IF NOT EXISTS login_password_tag TEXT;
+        ADD COLUMN IF NOT EXISTS login_password_tag TEXT,
+        ADD COLUMN IF NOT EXISTS billing_type TEXT DEFAULT 'one_time',
+        ADD COLUMN IF NOT EXISTS recurrence_day INTEGER,
+        ADD COLUMN IF NOT EXISTS next_due_date DATE;
+    `);
+
+    await activePool.query(`
+      UPDATE subscriptions
+      SET next_due_date = to_date(due_date, 'YYYY-MM-DD')
+      WHERE next_due_date IS NULL
+        AND due_date ~ '^\\d{4}-\\d{2}-\\d{2}$'
+        AND to_char(to_date(due_date, 'YYYY-MM-DD'), 'YYYY-MM-DD') = due_date;
+    `);
+
+    await activePool.query(`
+      UPDATE subscriptions
+      SET billing_type = 'one_time'
+      WHERE billing_type IS NULL
+         OR billing_type NOT IN ('one_time', 'monthly', 'yearly');
     `);
 
     await activePool.query(`

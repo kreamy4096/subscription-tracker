@@ -76,7 +76,10 @@ function apiUnauthorized() {
 export async function proxy(request: NextRequest) {
   const expectedUsername = process.env.SUBTRACK_ADMIN_USERNAME;
   const expectedPassword = process.env.SUBTRACK_ADMIN_PASSWORD;
-  const cronSecret = process.env.REMINDER_CRON_SECRET;
+  const cronSecrets = [
+    process.env.CRON_SECRET,
+    process.env.REMINDER_CRON_SECRET,
+  ].filter(Boolean);
   const sessionSecret =
     process.env.AUTH_SESSION_SECRET || process.env.CREDENTIAL_ENCRYPTION_KEY;
   const authorization = request.headers.get("authorization");
@@ -84,8 +87,7 @@ export async function proxy(request: NextRequest) {
 
   if (
     pathname === "/api/reminders/send" &&
-    cronSecret &&
-    authorization === `Bearer ${cronSecret}`
+    cronSecrets.some((cronSecret) => authorization === `Bearer ${cronSecret}`)
   ) {
     return NextResponse.next();
   }

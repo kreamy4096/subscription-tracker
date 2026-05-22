@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Subscription } from "@/lib/subscription-types";
+import { getReminderStartDate } from "@/lib/subscription-dates";
 
 interface SubscriptionModalProps {
   isOpen: boolean;
@@ -10,22 +11,27 @@ interface SubscriptionModalProps {
   onClose: () => void;
   onSaved: (subscription: Subscription) => void;
   onDeleted: (subscriptionId: string) => void;
+  onNotify?: (message: {
+    title: string;
+    description?: string;
+    tone?: "success" | "error" | "info";
+  }) => void;
 }
 
-interface SubscriptionFormState extends Omit<Subscription, "id" | "created_at"> {
-  due_date_recurring: string;
-}
+type SubscriptionFormState = Omit<Subscription, "id" | "created_at">;
 
 const emptyForm: SubscriptionFormState = {
   tool: "",
   subscription: "",
   due_date: "",
-  due_date_recurring: "",
+  billing_type: "one_time",
+  recurrence_day: null,
+  next_due_date: "",
   price: "",
   login_email: "",
   login_password: "",
   action: "Renewal",
-  payment_status: "Paid",
+  payment_status: "Pending",
 };
 
 function toDateInputValue(value: string) {
@@ -63,19 +69,22 @@ function getInitialFormState(subscription: Subscription | null) {
     return emptyForm;
   }
 
-  const normalizedDate = toDateInputValue(subscription.due_date || "");
-  const recurringValue = normalizedDate ? "" : subscription.due_date || "";
+  const normalizedDate = toDateInputValue(
+    subscription.next_due_date || subscription.due_date || "",
+  );
 
   return {
     tool: subscription.tool || "",
     subscription: subscription.subscription || "",
     due_date: normalizedDate,
-    due_date_recurring: recurringValue,
+    billing_type: subscription.billing_type || "one_time",
+    recurrence_day: subscription.recurrence_day ?? null,
+    next_due_date: normalizedDate,
     price: normalizePriceValue(subscription.price || ""),
     login_email: subscription.login_email || "",
     login_password: subscription.login_password || "",
     action: subscription.action || "Renewal",
-    payment_status: subscription.payment_status || "Paid",
+    payment_status: subscription.payment_status || "Pending",
   };
 }
 
@@ -86,6 +95,7 @@ export default function SubscriptionModal({
   onClose,
   onSaved,
   onDeleted,
+  onNotify,
 }: SubscriptionModalProps) {
   const [formData, setFormData] = useState(() =>
     getInitialFormState(mode === "edit" ? subscription : null),
@@ -95,6 +105,9 @@ export default function SubscriptionModal({
   const [showPassword, setShowPassword] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [error, setError] = useState("");
+  const reminderPreview = formData.due_date
+    ? getReminderStartDate(formData.due_date, 3)
+    : "";
 
   const handleChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
@@ -113,7 +126,11 @@ export default function SubscriptionModal({
 
     const payload = {
       ...formData,
-      due_date: formData.due_date_recurring.trim() || formData.due_date,
+      next_due_date: formData.due_date,
+      recurrence_day:
+        formData.billing_type === "one_time" || !formData.due_date
+          ? null
+          : Number.parseInt(formData.due_date.slice(8, 10), 10),
     };
 
     const endpoint =
@@ -135,6 +152,11 @@ export default function SubscriptionModal({
 
       if (!response.ok) {
         setError(data.error || "Unable to save subscription.");
+        onNotify?.({
+          title: "Subscription not saved",
+          description: data.error || "Unable to save subscription.",
+          tone: "error",
+        });
         return;
       }
 
@@ -143,6 +165,11 @@ export default function SubscriptionModal({
     } catch (submitError) {
       console.error("Failed to save subscription:", submitError);
       setError("A network error occurred while saving.");
+      onNotify?.({
+        title: "Subscription not saved",
+        description: "A network error occurred while saving.",
+        tone: "error",
+      });
     } finally {
       setIsSaving(false);
     }
@@ -164,6 +191,11 @@ export default function SubscriptionModal({
 
       if (!response.ok) {
         setError(data.error || "Unable to delete subscription.");
+        onNotify?.({
+          title: "Delete failed",
+          description: data.error || "Unable to delete subscription.",
+          tone: "error",
+        });
         return;
       }
 
@@ -173,6 +205,11 @@ export default function SubscriptionModal({
     } catch (deleteError) {
       console.error("Failed to delete subscription:", deleteError);
       setError("A network error occurred while deleting.");
+      onNotify?.({
+        title: "Delete failed",
+        description: "A network error occurred while deleting.",
+        tone: "error",
+      });
     } finally {
       setIsDeleting(false);
     }
@@ -254,7 +291,7 @@ export default function SubscriptionModal({
 
             <label className="block">
               <span className="mb-2 block text-label-md font-semibold text-on-surface">
-                Due Date
+                Next Due Date
               </span>
               <input
                 name="due_date"
@@ -264,25 +301,48 @@ export default function SubscriptionModal({
                 className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low ui-control-pad text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
               />
               <p className="mt-2 text-label-sm text-secondary">
-                Use this for one-off calendar dates.
+                The reminder engine tracks this exact date.
               </p>
             </label>
 
             <label className="block">
               <span className="mb-2 block text-label-md font-semibold text-on-surface">
-                Recurring Due Date
+                Billing Cadence
               </span>
-              <input
-                name="due_date_recurring"
-                value={formData.due_date_recurring}
+              <select
+                name="billing_type"
+                value={formData.billing_type}
                 onChange={handleChange}
-                placeholder="23rd of every month"
                 className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low ui-control-pad text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
-              />
+              >
+                <option value="one_time">One-time</option>
+                <option value="monthly">Monthly</option>
+                <option value="yearly">Yearly</option>
+              </select>
               <p className="mt-2 text-label-sm text-secondary">
-                If set, this takes priority over the calendar date.
+                Recurring plans advance after they are marked paid.
               </p>
             </label>
+
+            {reminderPreview ? (
+              <div className="rounded-xl border border-primary/20 bg-primary-fixed/40 ui-panel-pad md:col-span-2">
+                <p className="text-label-md font-semibold text-primary">
+                  Reminder window preview
+                </p>
+                <p className="mt-1 text-body-md text-on-surface-variant">
+                  With a 3-day reminder setting, reminders would start on{" "}
+                  {new Date(`${reminderPreview}T00:00:00`).toLocaleDateString(
+                    "en-US",
+                    {
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                    },
+                  )}{" "}
+                  and continue daily until this subscription is marked paid.
+                </p>
+              </div>
+            ) : null}
 
             <label className="block">
               <span className="mb-2 block text-label-md font-semibold text-on-surface">

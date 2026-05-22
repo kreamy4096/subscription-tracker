@@ -3,6 +3,9 @@ export interface Subscription {
   tool: string;
   subscription: string;
   due_date: string;
+  billing_type?: "one_time" | "monthly" | "yearly";
+  recurrence_day?: number | null;
+  next_due_date?: string;
   price: string;
   login_email: string;
   login_password?: string;

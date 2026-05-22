@@ -1,8 +1,9 @@
 "use client";
 
-import { useDeferredValue, useEffect, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
 import ReminderSettingsModal from "@/components/ReminderSettingsModal";
 import SubscriptionModal from "@/components/SubscriptionModal";
+import ToastViewport, { type ToastMessage } from "@/components/ToastViewport";
 import type { Subscription } from "@/lib/subscription-types";
 
 const navItems = [
@@ -71,6 +72,9 @@ function normalizeSubscription(
     tool: item.tool ?? "",
     subscription: item.subscription ?? "",
     due_date: item.due_date ?? "",
+    billing_type: item.billing_type ?? "one_time",
+    recurrence_day: item.recurrence_day ?? null,
+    next_due_date: item.next_due_date ?? item.due_date ?? "",
     price: item.price ?? "",
     login_email: item.login_email ?? "",
     login_password: item.login_password ?? "",
@@ -174,9 +178,22 @@ export default function Home() {
   const [openCredentialsId, setOpenCredentialsId] = useState<string | null>(null);
   const [popoverPasswordVisible, setPopoverPasswordVisible] = useState(false);
   const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const credentialsPopoverRef = useRef<HTMLDivElement | null>(null);
 
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
+
+  const showToast = useCallback((message: Omit<ToastMessage, "id">) => {
+    const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}`;
+    setToasts((current) => [...current, { id, ...message }].slice(-3));
+    window.setTimeout(() => {
+      setToasts((current) => current.filter((toast) => toast.id !== id));
+    }, 4200);
+  }, []);
+
+  const dismissToast = (id: string) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+  };
 
   useEffect(() => {
     const loadSubscriptions = async () => {
@@ -189,6 +206,11 @@ export default function Home() {
 
         if (!response.ok) {
           setError(data.error || "Unable to load subscriptions.");
+          showToast({
+            title: "Subscriptions not loaded",
+            description: data.error || "Showing local preview data.",
+            tone: "error",
+          });
           setSubscriptions(seedSubscriptions);
           return;
         }
@@ -201,6 +223,11 @@ export default function Home() {
       } catch (loadError) {
         console.error("Failed to load subscriptions:", loadError);
         setError("Database unavailable. Showing local preview data.");
+        showToast({
+          title: "Subscriptions not loaded",
+          description: "Database unavailable. Showing local preview data.",
+          tone: "error",
+        });
         setSubscriptions(seedSubscriptions);
       } finally {
         setIsLoading(false);
@@ -208,7 +235,7 @@ export default function Home() {
     };
 
     void loadSubscriptions();
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -282,12 +309,22 @@ export default function Home() {
       );
 
       if (existingIndex === -1) {
+        showToast({
+          title: "Subscription created",
+          description: `${savedSubscription.tool || "New subscription"} was added.`,
+          tone: "success",
+        });
         return [
           normalizeSubscription(savedSubscription),
           ...current.filter((item) => !item.id.startsWith("seed-")),
         ];
       }
 
+      showToast({
+        title: "Subscription updated",
+        description: `${savedSubscription.tool || "Subscription"} was saved.`,
+        tone: "success",
+      });
       return current.map((item) =>
         item.id === savedSubscription.id
           ? normalizeSubscription(savedSubscription)
@@ -300,6 +337,19 @@ export default function Home() {
     setSubscriptions((current) =>
       current.filter((item) => item.id !== subscriptionId),
     );
+  };
+
+  const handleModalDeleted = (subscriptionId: string) => {
+    const deletedName =
+      selectedSubscription?.id === subscriptionId
+        ? selectedSubscription.tool
+        : "Subscription";
+    handleDeleted(subscriptionId);
+    showToast({
+      title: "Subscription deleted",
+      description: `${deletedName || "Subscription"} was removed.`,
+      tone: "success",
+    });
   };
 
   const handleDeleteFromTable = async (subscription: Subscription) => {
@@ -320,13 +370,28 @@ export default function Home() {
 
       if (!response.ok) {
         setError(data.error || "Unable to delete subscription.");
+        showToast({
+          title: "Delete failed",
+          description: data.error || "Unable to delete subscription.",
+          tone: "error",
+        });
         return;
       }
 
       handleDeleted(subscription.id);
+      showToast({
+        title: "Subscription deleted",
+        description: `${subscription.tool || "Subscription"} was removed.`,
+        tone: "success",
+      });
     } catch (deleteError) {
       console.error("Failed to delete subscription:", deleteError);
       setError("A network error occurred while deleting the subscription.");
+      showToast({
+        title: "Delete failed",
+        description: "A network error occurred while deleting.",
+        tone: "error",
+      });
     }
   };
 
@@ -352,6 +417,11 @@ export default function Home() {
 
       if (!response.ok) {
         setError(data.error || "Unable to update payment status.");
+        showToast({
+          title: "Status not updated",
+          description: data.error || "Unable to update payment status.",
+          tone: "error",
+        });
         return;
       }
 
@@ -360,9 +430,22 @@ export default function Home() {
           item.id === subscription.id ? normalizeSubscription(data) : item,
         ),
       );
+      showToast({
+        title: "Payment status updated",
+        description:
+          data.payment_status && data.payment_status !== paymentStatus
+            ? `${subscription.tool || "Subscription"} advanced to the next billing cycle.`
+            : `${subscription.tool || "Subscription"} is now ${paymentStatus}.`,
+        tone: "success",
+      });
     } catch (statusError) {
       console.error("Failed to update payment status:", statusError);
       setError("A network error occurred while updating payment status.");
+      showToast({
+        title: "Status not updated",
+        description: "A network error occurred while updating payment status.",
+        tone: "error",
+      });
     } finally {
       setStatusSavingId(null);
     }
@@ -811,13 +894,16 @@ export default function Home() {
         subscription={selectedSubscription}
         onClose={() => setIsModalOpen(false)}
         onSaved={handleSaved}
-        onDeleted={handleDeleted}
+        onDeleted={handleModalDeleted}
+        onNotify={showToast}
       />
 
       <ReminderSettingsModal
         isOpen={isReminderSettingsOpen}
         onClose={() => setIsReminderSettingsOpen(false)}
+        onNotify={showToast}
       />
+      <ToastViewport messages={toasts} onDismiss={dismissToast} />
     </>
   );
 }
