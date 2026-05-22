@@ -45,6 +45,17 @@ function requireEnv(name) {
   return value;
 }
 
+function getVerifiedConnectionString(connectionString) {
+  const url = new URL(connectionString);
+  const sslMode = url.searchParams.get("sslmode");
+
+  if (sslMode && ["prefer", "require", "verify-ca"].includes(sslMode)) {
+    url.searchParams.set("sslmode", "verify-full");
+  }
+
+  return url.toString();
+}
+
 function getReminderEndpoint() {
   const baseUrl = (
     process.env.REMINDER_BASE_URL ||
@@ -255,7 +266,7 @@ async function triggerReminderEndpoint() {
 loadEnvFile();
 
 const pool = new Pool({
-  connectionString: requireEnv("DATABASE_URL"),
+  connectionString: getVerifiedConnectionString(requireEnv("DATABASE_URL")),
   ssl: {
     rejectUnauthorized: true,
   },

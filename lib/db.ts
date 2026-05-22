@@ -3,6 +3,17 @@ import { Pool } from "pg";
 let pool: Pool | null = null;
 let dbInitialized = false;
 
+function getVerifiedConnectionString(connectionString: string) {
+  const url = new URL(connectionString);
+  const sslMode = url.searchParams.get("sslmode");
+
+  if (sslMode && ["prefer", "require", "verify-ca"].includes(sslMode)) {
+    url.searchParams.set("sslmode", "verify-full");
+  }
+
+  return url.toString();
+}
+
 export function getPool() {
   if (!pool) {
     const connectionString = process.env.DATABASE_URL;
@@ -11,7 +22,7 @@ export function getPool() {
     }
 
     pool = new Pool({
-      connectionString,
+      connectionString: getVerifiedConnectionString(connectionString),
       ssl: {
         rejectUnauthorized: true,
       },
