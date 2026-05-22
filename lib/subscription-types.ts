@@ -16,4 +16,27 @@ export interface ReminderSettings {
   email: string;
   days_before: number;
   enabled: boolean;
+  groups?: ReminderGroup[];
+  recipients?: ReminderRecipient[];
+}
+
+export interface ReminderGroup {
+  id: string;
+  name: string;
+  days_before: number;
+  enabled: boolean;
+  recipients: ReminderRecipient[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ReminderRecipient {
+  id: string;
+  group_id?: string;
+  email: string;
+  is_primary: boolean;
+  is_active: boolean;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
 }

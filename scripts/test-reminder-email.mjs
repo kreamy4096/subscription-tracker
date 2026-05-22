@@ -5,7 +5,7 @@ import pg from "pg";
 
 const { Pool } = pg;
 const recipientEmail =
-  process.env.TEST_REMINDER_EMAIL || "abdullah.ajibowu@workforcegroup.com";
+  process.env.TEST_REMINDER_EMAIL || "abdullahajibowu0@gmail.com";
 
 function loadEnvFile() {
   const envPath = path.join(process.cwd(), ".env");
@@ -56,6 +56,8 @@ function getReminderEndpoint() {
 }
 
 async function ensureTables(client) {
+  await client.query("CREATE EXTENSION IF NOT EXISTS pgcrypto;");
+
   await client.query(`
     CREATE TABLE IF NOT EXISTS subscriptions (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -83,6 +85,57 @@ async function ensureTables(client) {
       updated_at TIMESTAMPTZ DEFAULT now()
     );
   `);
+
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS reminder_groups (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      name TEXT NOT NULL DEFAULT 'Default',
+      days_before INTEGER DEFAULT 3,
+      enabled BOOLEAN DEFAULT true,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now()
+    );
+  `);
+
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS reminder_recipients (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      group_id UUID,
+      email TEXT NOT NULL,
+      email_normalized TEXT GENERATED ALWAYS AS (lower(email)) STORED,
+      is_primary BOOLEAN DEFAULT false,
+      is_active BOOLEAN DEFAULT true,
+      sort_order INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      updated_at TIMESTAMPTZ DEFAULT now()
+    );
+  `);
+
+  await client.query(`
+    ALTER TABLE reminder_recipients
+      ADD COLUMN IF NOT EXISTS group_id UUID,
+      ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true,
+      ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
+  `);
+
+  await client.query(`
+    DROP INDEX IF EXISTS reminder_recipients_email_normalized_key;
+  `);
+
+  await client.query(`
+    DROP INDEX IF EXISTS reminder_recipients_one_primary;
+  `);
+
+  await client.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS reminder_recipients_group_email_key
+    ON reminder_recipients (group_id, email_normalized);
+  `);
+
+  await client.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS reminder_recipients_one_primary_per_group
+    ON reminder_recipients (group_id)
+    WHERE is_primary = true;
+  `);
 }
 
 async function setReminderRecipient(client) {
@@ -96,20 +149,57 @@ async function setReminderRecipient(client) {
        WHERE id = $2`,
       [recipientEmail, id],
     );
-    return;
+  } else {
+    await client.query(
+      `INSERT INTO reminder_settings (email, days_before, enabled)
+       VALUES ($1, 3, true)`,
+      [recipientEmail],
+    );
   }
 
+  let groupResult = await client.query(
+    "SELECT id FROM reminder_groups ORDER BY created_at ASC LIMIT 1",
+  );
+  if (groupResult.rows.length === 0) {
+    groupResult = await client.query(
+      `INSERT INTO reminder_groups (name, days_before, enabled)
+       VALUES ('Default', 3, true)
+       RETURNING id`,
+    );
+  } else {
+    await client.query(
+      `UPDATE reminder_groups
+       SET name = 'Default', days_before = 3, enabled = true, updated_at = now()
+       WHERE id = $1`,
+      [groupResult.rows[0].id],
+    );
+  }
+
+  const groupId = groupResult.rows[0].id;
+  await client.query("DELETE FROM reminder_recipients WHERE group_id = $1", [
+    groupId,
+  ]);
   await client.query(
-    `INSERT INTO reminder_settings (email, days_before, enabled)
-     VALUES ($1, 3, true)`,
-    [recipientEmail],
+    `INSERT INTO reminder_recipients (
+      group_id,
+      email,
+      is_primary,
+      is_active,
+      sort_order
+    ) VALUES ($1, $2, true, true, 0)`,
+    [groupId, recipientEmail],
   );
 }
 
 async function createFakeDueSubscription(client) {
   const now = new Date();
   const dueDate = now.toISOString().slice(0, 10);
-  const label = `[Cron Test] Zoho Reminder ${now.toISOString()}`;
+
+  await client.query(
+    `DELETE FROM subscriptions
+     WHERE tool LIKE '[Cron Test] Zoho Reminder%'
+        OR tool = 'Zoho Reminder Test'`,
+  );
 
   const result = await client.query(
     `INSERT INTO subscriptions (
@@ -125,8 +215,8 @@ async function createFakeDueSubscription(client) {
     VALUES ($1, $2, $3, $4, $5, NULL, $6, $7)
     RETURNING id, tool, due_date`,
     [
-      label,
-      "Production cron reliability test",
+      "Zoho Reminder Test",
+      "Reminder email preview",
       dueDate,
       "$1",
       recipientEmail,

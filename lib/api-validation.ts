@@ -12,9 +12,23 @@ export interface SubscriptionInput {
 }
 
 export interface ReminderSettingsInput {
-  email: string;
+  groups: ReminderGroupInput[];
+}
+
+export interface ReminderGroupInput {
+  id?: string;
+  name: string;
   days_before: number;
   enabled: boolean;
+  recipients: ReminderRecipientInput[];
+}
+
+export interface ReminderRecipientInput {
+  id?: string;
+  email: string;
+  is_primary: boolean;
+  is_active: boolean;
+  sort_order: number;
 }
 
 const actions = new Set([
@@ -33,6 +47,10 @@ function cleanString(value: unknown, maxLength: number) {
   }
 
   return value.trim().slice(0, maxLength);
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
 export function parseSubscriptionInput(value: unknown) {
@@ -77,30 +95,111 @@ export function parseReminderSettingsInput(value: unknown) {
   }
 
   const input = value as Record<string, unknown>;
-  const email = cleanString(input.email, 1000);
-  const daysBefore = Number.parseInt(String(input.days_before ?? ""), 10);
+  const rawGroups = Array.isArray(input.groups)
+    ? input.groups
+    : [
+        {
+          id: undefined,
+          name: "Default",
+          days_before: input.days_before,
+          enabled: input.enabled,
+          recipients: Array.isArray(input.recipients)
+            ? input.recipients
+            : cleanString(input.email, 1000)
+                .split(",")
+                .map((email) => ({ email, is_primary: false, is_active: true })),
+        },
+      ];
 
-  const emails = email
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
+  const groups = rawGroups.map((item, groupIndex) => {
+    const group =
+      item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+    const daysBefore = Number.parseInt(String(group.days_before ?? ""), 10);
+    const rawRecipients = Array.isArray(group.recipients)
+      ? group.recipients
+      : [];
 
-  if (
-    emails.length === 0 ||
-    emails.some((item) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(item))
-  ) {
-    return { error: "Email must contain one or more valid email addresses" };
+    const recipients = rawRecipients
+      .map((recipientValue, index) => {
+        const recipient =
+          recipientValue && typeof recipientValue === "object"
+            ? (recipientValue as Record<string, unknown>)
+            : {};
+        return {
+          id: cleanString(recipient.id, 80) || undefined,
+          email: cleanString(recipient.email, 254).toLowerCase(),
+          is_primary: recipient.is_primary === true,
+          is_active: recipient.is_active !== false,
+          sort_order: Number.isInteger(Number(recipient.sort_order))
+            ? Number(recipient.sort_order)
+            : index,
+        };
+      })
+      .filter((recipient) => recipient.email)
+      .sort((a, b) => a.sort_order - b.sort_order);
+
+    return {
+      id: cleanString(group.id, 80) || undefined,
+      name: cleanString(group.name, 80) || `Group ${groupIndex + 1}`,
+      days_before: daysBefore,
+      enabled: group.enabled === true,
+      recipients,
+    };
+  });
+
+  if (groups.length === 0) {
+    return { error: "Add at least one reminder group" };
   }
 
-  if (!Number.isInteger(daysBefore) || daysBefore < 1 || daysBefore > 90) {
-    return { error: "Days before must be between 1 and 90" };
+  for (const group of groups) {
+    if (
+      !Number.isInteger(group.days_before) ||
+      group.days_before < 1 ||
+      group.days_before > 90
+    ) {
+      return { error: "Days before must be between 1 and 90" };
+    }
+
+    const emailKeys = new Set<string>();
+    for (const recipient of group.recipients) {
+      if (!isValidEmail(recipient.email)) {
+        return { error: "Each reminder email must be a valid email address" };
+      }
+
+      if (emailKeys.has(recipient.email)) {
+        return { error: "Reminder emails must be unique within each group" };
+      }
+
+      emailKeys.add(recipient.email);
+    }
+
+    const activeRecipients = group.recipients.filter(
+      (recipient) => recipient.is_active,
+    );
+    if (group.enabled && activeRecipients.length === 0) {
+      return {
+        error: "Enabled reminder groups need at least one active email",
+      };
+    }
+
+    const firstPrimaryIndex = group.recipients.findIndex(
+      (recipient) => recipient.is_primary && recipient.is_active,
+    );
+    group.recipients = group.recipients.map((recipient, index) => ({
+      ...recipient,
+      sort_order: index,
+      is_primary:
+        recipient.is_active &&
+        activeRecipients.length > 0 &&
+        (firstPrimaryIndex === -1
+          ? index === group.recipients.findIndex((item) => item.is_active)
+          : index === firstPrimaryIndex),
+    }));
   }
 
   return {
     data: {
-      email,
-      days_before: daysBefore,
-      enabled: input.enabled === true,
+      groups,
     } satisfies ReminderSettingsInput,
   };
 }

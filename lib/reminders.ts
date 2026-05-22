@@ -1,10 +1,19 @@
 import type { Subscription } from "@/lib/subscription-types";
 import { query } from "@/lib/db";
 
-interface ReminderSettingsRow {
-  email: string;
+interface ReminderGroupRow {
+  id: string;
+  name: string;
   days_before: number;
   enabled: boolean;
+}
+
+interface ReminderRecipientRow {
+  group_id: string;
+  email: string;
+  is_primary: boolean;
+  is_active: boolean;
+  sort_order: number;
 }
 
 interface ZohoAccessTokenResponse {
@@ -43,6 +52,12 @@ function getRequiredEnv(name: string) {
     throw new Error(`${name} environment variable is missing.`);
   }
   return value;
+}
+
+function getZohoFromAddress() {
+  const fromEmail = getRequiredEnv("ZOHO_FROM_EMAIL");
+  const fromName = process.env.ZOHO_FROM_NAME || "Automation Admin";
+  return `"${fromName.replaceAll('"', "")}" <${fromEmail}>`;
 }
 
 function normalizeSubscription(
@@ -154,20 +169,84 @@ function getDaysUntilDue(dueDate: string, now: Date) {
   return getMonthlyRecurringDaysUntilDue(recurringDay, now);
 }
 
-async function getReminderSettings() {
-  const result = await query(
-    "SELECT email, days_before, enabled FROM reminder_settings LIMIT 1",
-  );
-  if (result.rows.length === 0) {
-    return null;
+function parsePriceAmount(value: string | null | undefined) {
+  const numeric = Number.parseFloat((value ?? "").replace(/[^0-9.]/g, ""));
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function formatReminderDate(value: string | null | undefined) {
+  if (!value) {
+    return "-";
   }
 
-  const row = result.rows[0] as ReminderSettingsRow;
-  return {
-    email: row.email,
-    daysBefore: Number(row.days_before ?? 3),
-    enabled: Boolean(row.enabled),
-  };
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+async function getReminderGroups() {
+  const groupsResult = await query(
+    `SELECT id, name, days_before, enabled
+     FROM reminder_groups
+     ORDER BY created_at ASC, name ASC`,
+  );
+  const recipientsResult = await query(
+    `SELECT group_id, email, is_primary, is_active, sort_order
+     FROM reminder_recipients
+     WHERE is_active = true
+     ORDER BY sort_order ASC, created_at ASC, email ASC`,
+  );
+  const recipients = recipientsResult.rows as ReminderRecipientRow[];
+
+  if (groupsResult.rows.length > 0) {
+    return (groupsResult.rows as ReminderGroupRow[]).map((group) => ({
+      id: group.id,
+      name: group.name,
+      daysBefore: Number(group.days_before ?? 3),
+      enabled: Boolean(group.enabled),
+      recipients: recipients
+        .filter((recipient) => recipient.group_id === group.id)
+        .map((recipient) => ({
+          email: recipient.email,
+          isPrimary: Boolean(recipient.is_primary),
+          sortOrder: Number(recipient.sort_order ?? 0),
+        })),
+    }));
+  }
+
+  const settingsResult = await query(
+    "SELECT email, days_before, enabled FROM reminder_settings LIMIT 1",
+  );
+  const row = settingsResult.rows[0] as
+    | { email: string; days_before: number; enabled: boolean }
+    | undefined;
+  if (!row) {
+    return [];
+  }
+
+  return [
+    {
+      id: "legacy",
+      name: "Default",
+      daysBefore: Number(row.days_before ?? 3),
+      enabled: Boolean(row.enabled),
+      recipients: row.email
+        .split(",")
+        .map((value, index) => ({
+          email: value.trim(),
+          isPrimary: index === 0,
+          sortOrder: index,
+        }))
+        .filter((item) => item.email),
+    },
+  ];
 }
 
 async function getUnpaidSubscriptions() {
@@ -255,50 +334,169 @@ async function getZohoAccountId(accessToken: string) {
 }
 
 function buildReminderEmail(subscriptions: Subscription[]) {
-  const rows = subscriptions
+  const primarySubscription = subscriptions[0];
+  const subscriptionCount = subscriptions.length;
+  const totalAmount = subscriptions.reduce(
+    (sum, item) => sum + parsePriceAmount(item.price),
+    0,
+  );
+  const amountLabel =
+    totalAmount > 0
+      ? `$${totalAmount.toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`
+      : escapeHtml(primarySubscription?.price || "-");
+  const dashboardUrl = "https://substr-ack.vercel.app/";
+  const planRows = subscriptions
     .map(
       (item) => `
         <tr>
-          <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;">${escapeHtml(item.tool || "-")}</td>
-          <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;">${escapeHtml(item.due_date || "-")}</td>
-          <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;">${escapeHtml(item.price || "-")}</td>
-          <td style="padding:12px 16px;border-bottom:1px solid #e5e7eb;">${escapeHtml(item.payment_status || "-")}</td>
+          <td class="plan-row" style="padding:12px 0;border-bottom:1px solid rgba(82,139,198,0.28);">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+              <tr>
+                <td style="padding-right:12px;">
+                  <div class="plan-title" style="font-size:16px;line-height:22px;color:#ffffff;font-weight:700;">${escapeHtml(item.tool || "-")}</div>
+                  <div class="muted-text" style="font-size:13px;line-height:20px;color:#b6c6de;">${escapeHtml(item.subscription || "Subscription")}</div>
+                  <div class="status-text" style="font-size:12px;line-height:20px;color:#41d884;">${escapeHtml(item.payment_status || "Reminder pending")}</div>
+                </td>
+                <td width="118" align="right" valign="top">
+                  <div class="amount-text" style="font-size:17px;line-height:24px;color:#ffffff;font-weight:700;">${escapeHtml(item.price || "-")}</div>
+                  <div class="small-muted" style="font-size:12px;line-height:18px;color:#b6c6de;">${escapeHtml(formatReminderDate(item.due_date))}</div>
+                </td>
+              </tr>
+            </table>
+          </td>
         </tr>`,
     )
     .join("");
 
   return `
-    <div style="font-family:Inter,Arial,sans-serif;background:#f8f9fa;padding:24px;color:#191c1d;">
-      <div style="max-width:760px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;">
-        <div style="background:#6366f1;padding:24px 28px;color:#ffffff;">
-          <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;opacity:0.85;">SubTrack Pro</div>
-          <h1 style="margin:10px 0 0;font-size:28px;line-height:1.2;">Subscriptions Due Soon</h1>
-        </div>
-        <div style="padding:24px 28px;">
-          <p style="margin:0 0 16px;font-size:14px;line-height:1.6;">
-            You have <strong>${subscriptions.length}</strong> subscription(s) that need attention soon.
-          </p>
-          <table style="width:100%;border-collapse:collapse;font-size:14px;">
-            <thead>
-              <tr style="background:#f3f4f6;text-align:left;">
-                <th style="padding:12px 16px;">Tool</th>
-                <th style="padding:12px 16px;">Due Date</th>
-                <th style="padding:12px 16px;">Price</th>
-                <th style="padding:12px 16px;">Payment Status</th>
+    <div style="margin:0;padding:0;background:#00152f;">
+      <style>
+        @media only screen and (max-width: 600px) {
+          .email-outer { padding: 0 !important; }
+          .email-card { width: 100% !important; border-radius: 10px !important; }
+          .hero-cell { padding: 24px 18px 18px !important; }
+          .hero-title { font-size: 28px !important; line-height: 34px !important; }
+          .hero-subtitle { font-size: 17px !important; line-height: 24px !important; margin-top: 8px !important; }
+          .section-cell { padding: 0 16px 16px !important; }
+          .panel-title { font-size: 18px !important; line-height: 24px !important; }
+          .body-copy { font-size: 14px !important; line-height: 22px !important; }
+          .detail-label { font-size: 12px !important; line-height: 18px !important; }
+          .detail-value { font-size: 20px !important; line-height: 26px !important; }
+          .plan-title { font-size: 14px !important; line-height: 20px !important; }
+          .muted-text { font-size: 11px !important; line-height: 18px !important; }
+          .status-text { font-size: 10px !important; line-height: 18px !important; }
+          .amount-text { font-size: 15px !important; line-height: 21px !important; }
+          .small-muted { font-size: 10px !important; line-height: 16px !important; }
+          .panel-pad { padding: 18px !important; }
+          .plan-table-pad { padding: 0 18px 8px !important; }
+          .cta-cell { padding: 4px 16px 22px !important; }
+          .cta-button { font-size: 17px !important; line-height: 22px !important; padding: 15px 18px !important; }
+          .help-cell { padding: 16px !important; }
+          .footer-cell { padding: 20px 18px !important; font-size: 12px !important; line-height: 20px !important; }
+        }
+      </style>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#00152f;background-image:radial-gradient(circle at 50% 0,#053d72 0,#00152f 58%);font-family:Inter,Arial,sans-serif;color:#ffffff;">
+        <tr>
+          <td class="email-outer" align="center" style="padding:0;">
+            <table class="email-card" role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;max-width:680px;border-collapse:separate;border-spacing:0;background:#031f3f;border:1px solid rgba(104,160,224,0.45);border-radius:14px;overflow:hidden;box-shadow:0 28px 80px rgba(0,0,0,0.35);">
+              <tr>
+                <td class="hero-cell" align="center" style="padding:26px 28px 22px;background:#052448;background-image:linear-gradient(160deg,#052d59 0%,#031d3c 55%,#02172f 100%);">
+                  <h1 class="hero-title" style="margin:0;font-size:34px;line-height:42px;font-weight:800;color:#ffffff;">Subscription Reminder</h1>
+                  <p class="hero-subtitle" style="margin:10px 0 0;font-size:19px;line-height:28px;color:#b6c6de;">
+                    ${subscriptionCount === 1 ? "Your subscription renews soon" : `${subscriptionCount} subscriptions renew soon`}
+                  </p>
+                </td>
               </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
-          <p style="margin:20px 0 0;font-size:13px;color:#556068;">
-            Log in to SubTrack Pro to mark as paid.
-          </p>
-        </div>
-      </div>
+
+              <tr>
+                <td class="section-cell" style="padding:0 28px 20px;background:#031f3f;">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:0;background:#062a52;border:1px solid rgba(104,160,224,0.45);border-radius:12px;">
+                    <tr>
+                      <td style="padding:20px 22px;">
+                        <div class="panel-title" style="font-size:22px;line-height:30px;font-weight:800;color:#ffffff;">Renewal attention needed</div>
+                        <div class="body-copy" style="margin-top:6px;font-size:16px;line-height:25px;color:#d5e0ef;">Review the due subscriptions below and update payment status once handled.</div>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <tr>
+                <td class="section-cell" style="padding:0 28px 20px;background:#031f3f;">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:0;background:#06264c;border:1px solid rgba(104,160,224,0.45);border-radius:12px;">
+                    <tr>
+                      <td class="panel-title panel-pad" colspan="3" style="padding:20px 20px 6px;font-size:20px;line-height:28px;font-weight:800;color:#ffffff;">Renewal details</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:14px 20px 22px;">
+                        <div class="detail-label" style="font-size:14px;line-height:21px;color:#b6c6de;">Renewal date</div>
+                        <div class="detail-value" style="margin-top:5px;font-size:22px;line-height:30px;font-weight:800;color:#ffffff;">${escapeHtml(formatReminderDate(primarySubscription?.due_date))}</div>
+                      </td>
+                      <td width="1" style="background:rgba(182,198,222,0.45);"></td>
+                      <td style="padding:14px 20px 22px;">
+                        <div class="detail-label" style="font-size:14px;line-height:21px;color:#b6c6de;">Amount</div>
+                        <div class="detail-value" style="margin-top:5px;font-size:22px;line-height:30px;font-weight:800;color:#ffffff;">${amountLabel}</div>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <tr>
+                <td class="section-cell" style="padding:0 28px 20px;background:#031f3f;">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:0;background:#06264c;border:1px solid rgba(104,160,224,0.45);border-radius:12px;">
+                    <tr>
+                      <td class="panel-title" style="padding:20px 20px 2px;font-size:20px;line-height:28px;font-weight:800;color:#ffffff;">Your plan${subscriptionCount > 1 ? "s" : ""}</td>
+                    </tr>
+                    <tr>
+                      <td class="plan-table-pad" style="padding:0 20px 8px;">
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                          ${planRows}
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <tr>
+                <td class="cta-cell" align="center" style="padding:6px 28px 26px;background:#031f3f;">
+                  <a class="cta-button" href="${escapeHtml(dashboardUrl)}" style="display:block;background:#32c978;border-radius:9px;color:#ffffff;text-decoration:none;font-size:19px;line-height:24px;font-weight:800;padding:16px 20px;">Manage Subscription&nbsp; &#8594;</a>
+                  <p class="muted-text" style="max-width:430px;margin:16px auto 0;font-size:14px;line-height:22px;color:#b6c6de;">Update payment status, renewal information, or plan details in SubTrack Pro.</p>
+                </td>
+              </tr>
+
+              <tr>
+                <td class="help-cell" style="padding:18px 28px;background:#031b37;border-top:1px solid rgba(104,160,224,0.28);border-bottom:1px solid rgba(104,160,224,0.28);">
+                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                    <tr>
+                      <td>
+                        <div class="panel-title" style="font-size:18px;line-height:25px;font-weight:800;color:#ffffff;">Need help?</div>
+                        <div class="muted-text" style="font-size:14px;line-height:22px;color:#b6c6de;">Reply to this email if any reminder detail looks incorrect.</div>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <tr>
+                <td class="footer-cell" align="center" style="padding:24px 28px;background:#031f3f;color:#b6c6de;font-size:14px;line-height:22px;">
+                  Thank you for keeping your subscriptions up to date.
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
     </div>`;
 }
 
 async function sendZohoReminderEmail(
-  recipientEmails: string[],
+  primaryEmail: string,
+  ccEmails: string[],
   subscriptions: Subscription[],
 ) {
   const accessToken = await getZohoAccessToken();
@@ -312,8 +510,9 @@ async function sendZohoReminderEmail(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        fromAddress: getRequiredEnv("ZOHO_FROM_EMAIL"),
-        toAddress: recipientEmails.join(","),
+        fromAddress: getZohoFromAddress(),
+        toAddress: primaryEmail,
+        ...(ccEmails.length > 0 ? { ccAddress: ccEmails.join(",") } : {}),
         subject: `SubTrack Pro - You have ${subscriptions.length} subscription(s) due soon`,
         content: buildReminderEmail(subscriptions),
         mailFormat: "html",
@@ -329,35 +528,50 @@ async function sendZohoReminderEmail(
 }
 
 export async function sendDueReminders() {
-  const settings = await getReminderSettings();
-  if (!settings || !settings.enabled || !settings.email) {
-    return { sent: 0 };
-  }
-
-  const recipientEmails = settings.email
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-  if (recipientEmails.length === 0) {
+  const groups = await getReminderGroups();
+  if (groups.length === 0) {
     return { sent: 0 };
   }
 
   const now = new Date();
   const subscriptions = await getUnpaidSubscriptions();
-  const dueSoon = subscriptions.filter((item) => {
-    const daysUntilDue = getDaysUntilDue(item.due_date, now);
-    return (
-      daysUntilDue !== null &&
-      daysUntilDue >= 0 &&
-      daysUntilDue <= settings.daysBefore
-    );
-  });
+  let sent = 0;
 
-  if (dueSoon.length === 0) {
-    return { sent: 0 };
+  for (const group of groups) {
+    if (!group.enabled) {
+      continue;
+    }
+
+    const recipientEmails = group.recipients
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((recipient) => recipient.email.trim())
+      .filter(Boolean);
+
+    if (recipientEmails.length === 0) {
+      continue;
+    }
+
+    const primaryEmail =
+      group.recipients.find((recipient) => recipient.isPrimary)?.email ||
+      recipientEmails[0];
+    const ccEmails = recipientEmails.filter((email) => email !== primaryEmail);
+
+    const dueSoon = subscriptions.filter((item) => {
+      const daysUntilDue = getDaysUntilDue(item.due_date, now);
+      return (
+        daysUntilDue !== null &&
+        daysUntilDue >= 0 &&
+        daysUntilDue <= group.daysBefore
+      );
+    });
+
+    if (dueSoon.length === 0) {
+      continue;
+    }
+
+    await sendZohoReminderEmail(primaryEmail, ccEmails, dueSoon);
+    sent += dueSoon.length;
   }
 
-  await sendZohoReminderEmail(recipientEmails, dueSoon);
-  return { sent: dueSoon.length };
+  return { sent };
 }

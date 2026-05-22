@@ -1,7 +1,7 @@
 "use client";
 
 import { useDeferredValue, useEffect, useRef, useState } from "react";
-import ReminderDrawer from "@/components/ReminderDrawer";
+import ReminderSettingsModal from "@/components/ReminderSettingsModal";
 import SubscriptionModal from "@/components/SubscriptionModal";
 import type { Subscription } from "@/lib/subscription-types";
 
@@ -166,7 +166,7 @@ export default function Home() {
   const [search, setSearch] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("All");
   const [actionFilter, setActionFilter] = useState("All");
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isReminderSettingsOpen, setIsReminderSettingsOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
   const [selectedSubscription, setSelectedSubscription] =
@@ -302,6 +302,34 @@ export default function Home() {
     );
   };
 
+  const handleDeleteFromTable = async (subscription: Subscription) => {
+    const confirmed = window.confirm(
+      `Delete ${subscription.tool || "this subscription"}?`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setError("");
+
+    try {
+      const response = await fetch(`/api/subscriptions/${subscription.id}`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Unable to delete subscription.");
+        return;
+      }
+
+      handleDeleted(subscription.id);
+    } catch (deleteError) {
+      console.error("Failed to delete subscription:", deleteError);
+      setError("A network error occurred while deleting the subscription.");
+    }
+  };
+
   const handleStatusChange = async (
     subscription: Subscription,
     paymentStatus: string,
@@ -429,7 +457,7 @@ export default function Home() {
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              onClick={() => setIsDrawerOpen(true)}
+              onClick={() => setIsReminderSettingsOpen(true)}
               className="flex items-center gap-2 rounded-xl border border-outline-variant ui-button-pad text-label-md text-secondary transition-colors hover:bg-surface-container-low"
             >
               <span className="material-symbols-outlined text-[18px]">settings</span>
@@ -447,9 +475,16 @@ export default function Home() {
               <span className="material-symbols-outlined cursor-pointer rounded-full p-2 text-secondary hover:bg-surface-container-high">
                 notifications
               </span>
-              <span className="material-symbols-outlined cursor-pointer rounded-full p-2 text-secondary hover:bg-surface-container-high">
-                settings
-              </span>
+              <button
+                type="button"
+                onClick={() => setIsReminderSettingsOpen(true)}
+                className="rounded-full p-2 text-secondary transition-colors hover:bg-surface-container-high"
+                aria-label="Open reminder settings"
+              >
+                <span className="material-symbols-outlined text-[24px]">
+                  settings
+                </span>
+              </button>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-full border border-surface-container-high bg-surface-container-low text-[11px] font-semibold text-primary">
               AA
@@ -582,12 +617,12 @@ export default function Home() {
                     "Credentials",
                     "Action",
                     "Status",
-                    "Edit",
+                    "Actions",
                   ].map((heading) => (
                     <th
                       key={heading}
                       className={`ui-table-cell text-label-md tracking-wider text-secondary uppercase ${
-                        heading === "Edit" ? "text-right" : ""
+                        heading === "Actions" ? "text-right" : ""
                       }`}
                     >
                       {heading}
@@ -617,7 +652,7 @@ export default function Home() {
                       <td className="ui-table-cell">
                         <div className="flex items-center gap-3">
                           <div
-                            className={`flex h-10 w-10 items-center justify-center rounded-xl text-[11px] font-semibold ${getAvatarClasses(item.tool)}`}
+                            className={`flex h-[26px] w-[26px] items-center justify-center rounded-lg text-[9px] font-semibold ${getAvatarClasses(item.tool)}`}
                           >
                             {item.tool.slice(0, 1).toUpperCase()}
                           </div>
@@ -737,15 +772,28 @@ export default function Home() {
                         </select>
                       </td>
                       <td className="ui-table-cell text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEdit(item)}
-                          className="rounded-full p-2 text-secondary transition-colors hover:bg-surface-container-high hover:text-on-surface"
-                        >
-                          <span className="material-symbols-outlined text-[18px]">
-                            edit
-                          </span>
-                        </button>
+                        <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(item)}
+                            className="rounded-full p-0.5 text-secondary transition-colors hover:bg-surface-container-high hover:text-on-surface"
+                            aria-label={`Edit ${item.tool}`}
+                          >
+                            <span className="material-symbols-outlined text-[9px]">
+                              edit
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteFromTable(item)}
+                            className="rounded-full p-0.5 text-secondary transition-colors hover:bg-surface-container-high hover:text-on-surface"
+                            aria-label={`Delete ${item.tool}`}
+                          >
+                            <span className="material-symbols-outlined text-[9px]">
+                              delete
+                            </span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -766,9 +814,9 @@ export default function Home() {
         onDeleted={handleDeleted}
       />
 
-      <ReminderDrawer
-        isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
+      <ReminderSettingsModal
+        isOpen={isReminderSettingsOpen}
+        onClose={() => setIsReminderSettingsOpen(false)}
       />
     </>
   );
