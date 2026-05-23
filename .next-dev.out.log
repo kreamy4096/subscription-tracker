@@ -1,0 +1,11 @@
+
+> subscription-tracker@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.106:3000
+- Environments: .env
+✓ Ready in 9.3s
+
+ GET /login 200 in 2.6s (next.js: 1144ms, proxy.ts: 82ms, application-code: 1388ms)

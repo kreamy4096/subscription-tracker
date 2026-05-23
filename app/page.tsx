@@ -1,17 +1,25 @@
 "use client";
 
-import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import ReminderSettingsModal from "@/components/ReminderSettingsModal";
 import SubscriptionModal from "@/components/SubscriptionModal";
 import ToastViewport, { type ToastMessage } from "@/components/ToastViewport";
 import type { Subscription } from "@/lib/subscription-types";
 
 const navItems = [
-  { icon: "dashboard", label: "Overview", active: true },
+  { icon: "dashboard", label: "Overview" },
   { icon: "payments", label: "Subscriptions" },
   { icon: "receipt_long", label: "Billing" },
   { icon: "monitoring", label: "Analytics" },
-];
+] as const;
+
+type DashboardTab = (typeof navItems)[number]["label"];
 
 const footerItems = [
   { icon: "help_outline", label: "Support" },
@@ -163,8 +171,13 @@ function getAvatarClasses(tool: string) {
   return avatarBackgrounds[sum % avatarBackgrounds.length];
 }
 
+function getDueDateTime(value: string | null | undefined) {
+  return parseDueDate(value)?.getTime() ?? Number.POSITIVE_INFINITY;
+}
+
 export default function Home() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [activeTab, setActiveTab] = useState<DashboardTab>("Overview");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -195,16 +208,27 @@ export default function Home() {
     setToasts((current) => current.filter((toast) => toast.id !== id));
   };
 
-  useEffect(() => {
-    const loadSubscriptions = async () => {
-      setIsLoading(true);
+  const loadSubscriptions = useCallback(
+    async ({ background = false }: { background?: boolean } = {}) => {
+      if (!background) {
+        setIsLoading(true);
+      }
       setError("");
 
       try {
-        const response = await fetch("/api/subscriptions");
+        const response = await fetch("/api/subscriptions", {
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache",
+          },
+        });
         const data = await response.json();
 
         if (!response.ok) {
+          if (background) {
+            return;
+          }
+
           setError(data.error || "Unable to load subscriptions.");
           showToast({
             title: "Subscriptions not loaded",
@@ -216,12 +240,14 @@ export default function Home() {
         }
 
         setSubscriptions(
-          data.length > 0
-            ? data.map((item: Subscription) => normalizeSubscription(item))
-            : seedSubscriptions,
+          data.map((item: Subscription) => normalizeSubscription(item)),
         );
       } catch (loadError) {
         console.error("Failed to load subscriptions:", loadError);
+        if (background) {
+          return;
+        }
+
         setError("Database unavailable. Showing local preview data.");
         showToast({
           title: "Subscriptions not loaded",
@@ -230,12 +256,28 @@ export default function Home() {
         });
         setSubscriptions(seedSubscriptions);
       } finally {
-        setIsLoading(false);
+        if (!background) {
+          setIsLoading(false);
+        }
       }
-    };
+    },
+    [showToast],
+  );
 
-    void loadSubscriptions();
-  }, [showToast]);
+  useEffect(() => {
+    const initialLoad = window.setTimeout(() => {
+      void loadSubscriptions();
+    }, 0);
+
+    const refreshInterval = window.setInterval(() => {
+      void loadSubscriptions({ background: true });
+    }, 15000);
+
+    return () => {
+      window.clearTimeout(initialLoad);
+      window.clearInterval(refreshInterval);
+    };
+  }, [loadSubscriptions]);
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -289,6 +331,29 @@ export default function Home() {
   const dueThisMonth = filteredSubscriptions.filter((item) =>
     isDueThisMonth(item.due_date),
   ).length;
+  const paidSubscriptions = filteredSubscriptions.filter(
+    (item) => item.payment_status === "Paid",
+  ).length;
+  const pendingSubscriptions = filteredSubscriptions.filter(
+    (item) => item.payment_status === "Pending",
+  ).length;
+  const notPaidSubscriptions = filteredSubscriptions.filter(
+    (item) => item.payment_status === "Not Paid",
+  ).length;
+  const averageSpend =
+    activeSubscriptions > 0 ? totalMonthlySpend / activeSubscriptions : 0;
+  const nextDueSubscriptions = [...filteredSubscriptions]
+    .sort(
+      (first, second) =>
+        getDueDateTime(first.next_due_date || first.due_date) -
+        getDueDateTime(second.next_due_date || second.due_date),
+    )
+    .slice(0, 5);
+  const spendByStatus = [
+    { label: "Paid", value: paidSubscriptions, color: "bg-success" },
+    { label: "Pending", value: pendingSubscriptions, color: "bg-warning" },
+    { label: "Not Paid", value: notPaidSubscriptions, color: "bg-error" },
+  ];
 
   const handleOpenAdd = () => {
     setSelectedSubscription(null);
@@ -331,12 +396,14 @@ export default function Home() {
           : item,
       );
     });
+    void loadSubscriptions({ background: true });
   };
 
   const handleDeleted = (subscriptionId: string) => {
     setSubscriptions((current) =>
       current.filter((item) => item.id !== subscriptionId),
     );
+    void loadSubscriptions({ background: true });
   };
 
   const handleModalDeleted = (subscriptionId: string) => {
@@ -438,6 +505,7 @@ export default function Home() {
             : `${subscription.tool || "Subscription"} is now ${paymentStatus}.`,
         tone: "success",
       });
+      void loadSubscriptions({ background: true });
     } catch (statusError) {
       console.error("Failed to update payment status:", statusError);
       setError("A network error occurred while updating payment status.");
@@ -486,8 +554,9 @@ export default function Home() {
             <button
               key={item.label}
               type="button"
+              onClick={() => setActiveTab(item.label)}
               className={`flex w-full items-center gap-3 px-[21px] py-[9px] text-left transition-colors duration-200 ${
-                item.active
+                item.label === activeTab
                   ? "border-r-2 border-primary font-bold text-primary"
                   : "text-secondary hover:bg-surface-container-low"
               }`}
@@ -530,10 +599,12 @@ export default function Home() {
               SubTrack Pro
             </p>
             <h2 className="mt-1 text-headline-lg-mobile font-semibold text-on-surface lg:text-headline-lg">
-              Dashboard Overview
+              {activeTab === "Overview" ? "Dashboard Overview" : activeTab}
             </h2>
             <p className="text-body-md text-secondary">
-              Manage your recurring expenses and service plans.
+              {activeTab === "Analytics"
+                ? "Live subscription metrics refreshed from the database."
+                : "Manage your recurring expenses and service plans."}
             </p>
           </div>
 
@@ -580,6 +651,26 @@ export default function Home() {
             {error}
           </div>
         ) : null}
+
+        <nav className="mb-gutter flex gap-2 overflow-x-auto lg:hidden">
+          {navItems.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => setActiveTab(item.label)}
+              className={`inline-flex shrink-0 items-center gap-2 rounded-lg border ui-button-pad text-label-md transition-colors ${
+                item.label === activeTab
+                  ? "border-primary bg-primary-fixed text-primary"
+                  : "border-outline-variant bg-surface-container-lowest text-secondary"
+              }`}
+            >
+              <span className="material-symbols-outlined text-[18px]">
+                {item.icon}
+              </span>
+              {item.label}
+            </button>
+          ))}
+        </nav>
 
         <section className="mb-gutter grid grid-cols-1 gap-gutter md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-card-pad transition-all hover:border-primary">
@@ -640,7 +731,147 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="flex flex-wrap items-center gap-4 rounded-xl border border-outline-variant bg-surface-container-lowest ui-panel-pad">
+        {activeTab === "Analytics" ? (
+          <section className="grid gap-gutter xl:grid-cols-[1.2fr_0.8fr]">
+            <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-card-pad">
+              <div className="mb-6 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-label-md tracking-wider text-secondary uppercase">
+                    Payment Status
+                  </p>
+                  <h3 className="mt-1 text-title-lg font-semibold text-on-surface">
+                    Live subscription mix
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void loadSubscriptions()}
+                  className="inline-flex items-center gap-2 rounded-lg border border-outline-variant ui-button-pad text-label-md text-secondary transition-colors hover:bg-surface-container-low"
+                >
+                  <span className="material-symbols-outlined text-[18px]">
+                    refresh
+                  </span>
+                  Refresh
+                </button>
+              </div>
+
+              <div className="space-y-5">
+                {spendByStatus.map((item) => {
+                  const percentage =
+                    activeSubscriptions > 0
+                      ? Math.round((item.value / activeSubscriptions) * 100)
+                      : 0;
+
+                  return (
+                    <div key={item.label}>
+                      <div className="mb-2 flex items-center justify-between text-body-md">
+                        <span className="font-semibold text-on-surface">
+                          {item.label}
+                        </span>
+                        <span className="text-secondary">
+                          {item.value} subscriptions - {percentage}%
+                        </span>
+                      </div>
+                      <div className="h-3 overflow-hidden rounded-full bg-surface-container-high">
+                        <div
+                          className={`h-full rounded-full ${item.color}`}
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-card-pad">
+              <p className="text-label-md tracking-wider text-secondary uppercase">
+                Spend Insight
+              </p>
+              <h3 className="mt-1 text-title-lg font-semibold text-on-surface">
+                ${averageSpend.toFixed(0)} average per subscription
+              </h3>
+              <div className="mt-6 grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-surface-container-low ui-panel-pad">
+                  <p className="text-label-md text-secondary">Tracked</p>
+                  <p className="mt-2 text-[25px] font-semibold text-on-surface">
+                    {activeSubscriptions}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-surface-container-low ui-panel-pad">
+                  <p className="text-label-md text-secondary">Monthly</p>
+                  <p className="mt-2 text-[25px] font-semibold text-on-surface">
+                    ${totalMonthlySpend.toFixed(0)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-card-pad xl:col-span-2">
+              <div className="mb-4 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-label-md tracking-wider text-secondary uppercase">
+                    Upcoming Payments
+                  </p>
+                  <h3 className="mt-1 text-title-lg font-semibold text-on-surface">
+                    Next due subscriptions
+                  </h3>
+                </div>
+                <span className="text-label-sm text-success">Auto-refreshes every 15s</span>
+              </div>
+
+              <div className="divide-y divide-surface-container-high">
+                {isLoading ? (
+                  <p className="py-8 text-center text-body-md text-secondary">
+                    Loading analytics...
+                  </p>
+                ) : nextDueSubscriptions.length === 0 ? (
+                  <p className="py-8 text-center text-body-md text-secondary">
+                    No live subscriptions available yet.
+                  </p>
+                ) : (
+                  nextDueSubscriptions.map((item) => (
+                    <div
+                      key={item.id}
+                      className="grid gap-3 py-4 md:grid-cols-[1fr_140px_120px_120px] md:items-center"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`flex h-[30px] w-[30px] items-center justify-center rounded-lg text-[10px] font-semibold ${getAvatarClasses(item.tool)}`}
+                        >
+                          {item.tool.slice(0, 1).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-body-md font-semibold text-on-surface">
+                            {item.tool}
+                          </p>
+                          <p className="text-label-md text-secondary">
+                            {item.subscription || "-"}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-body-md text-on-surface-variant">
+                        {formatDueDate(item.next_due_date || item.due_date)}
+                      </p>
+                      <p className="text-body-md font-semibold text-on-surface">
+                        {item.price || "-"}
+                      </p>
+                      <span
+                        className={`w-fit rounded-full ui-badge-pad text-label-sm font-semibold ${getStatusBadgeClasses(
+                          item.payment_status || "Not Paid",
+                        )}`}
+                      >
+                        {item.payment_status || "Not Paid"}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </section>
+        ) : (
+          <>
+            <section className="flex flex-wrap items-center gap-4 rounded-xl border border-outline-variant bg-surface-container-lowest ui-panel-pad">
           <div className="relative min-w-[280px] flex-1">
             <span className="material-symbols-outlined absolute top-1/2 left-3 -translate-y-1/2 text-secondary">
               search
@@ -685,9 +916,9 @@ export default function Home() {
             <span className="material-symbols-outlined text-[18px]">add</span>
             Add Subscription
           </button>
-        </section>
+            </section>
 
-        <section className="mt-6 overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest">
+            <section className="mt-6 overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[880px] border-collapse text-left">
               <thead>
@@ -884,7 +1115,9 @@ export default function Home() {
               </tbody>
             </table>
           </div>
-        </section>
+            </section>
+          </>
+        )}
       </main>
 
       <SubscriptionModal

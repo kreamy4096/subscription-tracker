@@ -5,6 +5,12 @@ import { encryptCredential } from "@/lib/credentials";
 import { query } from "@/lib/db";
 import { serializeSubscriptionRow } from "@/lib/subscription-serialization";
 
+export const dynamic = "force-dynamic";
+
+const liveDataHeaders = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+};
+
 export async function GET(request: Request) {
   const authError = requireBasicAuth(request);
   if (authError) {
@@ -41,12 +47,13 @@ export async function GET(request: Request) {
       result.rows.map((row) =>
         serializeSubscriptionRow(row as { id: string }),
       ),
+      { headers: liveDataHeaders },
     );
   } catch (error: unknown) {
     console.error("API Error in GET /api/subscriptions:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
-      { status: 500 },
+      { status: 500, headers: liveDataHeaders },
     );
   }
 }
