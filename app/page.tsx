@@ -209,10 +209,8 @@ export default function Home() {
   };
 
   const loadSubscriptions = useCallback(
-    async ({ background = false }: { background?: boolean } = {}) => {
-      if (!background) {
-        setIsLoading(true);
-      }
+    async () => {
+      setIsLoading(true);
       setError("");
 
       try {
@@ -225,10 +223,6 @@ export default function Home() {
         const data = await response.json();
 
         if (!response.ok) {
-          if (background) {
-            return;
-          }
-
           setError(data.error || "Unable to load subscriptions.");
           showToast({
             title: "Subscriptions not loaded",
@@ -244,10 +238,6 @@ export default function Home() {
         );
       } catch (loadError) {
         console.error("Failed to load subscriptions:", loadError);
-        if (background) {
-          return;
-        }
-
         setError("Database unavailable. Showing local preview data.");
         showToast({
           title: "Subscriptions not loaded",
@@ -256,9 +246,7 @@ export default function Home() {
         });
         setSubscriptions(seedSubscriptions);
       } finally {
-        if (!background) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       }
     },
     [showToast],
@@ -269,13 +257,8 @@ export default function Home() {
       void loadSubscriptions();
     }, 0);
 
-    const refreshInterval = window.setInterval(() => {
-      void loadSubscriptions({ background: true });
-    }, 15000);
-
     return () => {
       window.clearTimeout(initialLoad);
-      window.clearInterval(refreshInterval);
     };
   }, [loadSubscriptions]);
 
@@ -396,14 +379,12 @@ export default function Home() {
           : item,
       );
     });
-    void loadSubscriptions({ background: true });
   };
 
   const handleDeleted = (subscriptionId: string) => {
     setSubscriptions((current) =>
       current.filter((item) => item.id !== subscriptionId),
     );
-    void loadSubscriptions({ background: true });
   };
 
   const handleModalDeleted = (subscriptionId: string) => {
@@ -505,7 +486,6 @@ export default function Home() {
             : `${subscription.tool || "Subscription"} is now ${paymentStatus}.`,
         tone: "success",
       });
-      void loadSubscriptions({ background: true });
     } catch (statusError) {
       console.error("Failed to update payment status:", statusError);
       setError("A network error occurred while updating payment status.");
@@ -603,7 +583,7 @@ export default function Home() {
             </h2>
             <p className="text-body-md text-secondary">
               {activeTab === "Analytics"
-                ? "Live subscription metrics refreshed from the database."
+                ? "Subscription metrics calculated from the current dashboard data."
                 : "Manage your recurring expenses and service plans."}
             </p>
           </div>
@@ -626,9 +606,6 @@ export default function Home() {
               Add Subscription
             </button>
             <div className="hidden gap-2 sm:flex">
-              <span className="material-symbols-outlined cursor-pointer rounded-full p-2 text-secondary hover:bg-surface-container-high">
-                notifications
-              </span>
               <button
                 type="button"
                 onClick={() => setIsReminderSettingsOpen(true)}
@@ -817,7 +794,7 @@ export default function Home() {
                     Next due subscriptions
                   </h3>
                 </div>
-                <span className="text-label-sm text-success">Auto-refreshes every 15s</span>
+                <span className="text-label-sm text-success">Updates after dashboard actions</span>
               </div>
 
               <div className="divide-y divide-surface-container-high">
