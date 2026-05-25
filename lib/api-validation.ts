@@ -26,6 +26,7 @@ export interface ReminderGroupInput {
   days_before: number;
   enabled: boolean;
   recipients: ReminderRecipientInput[];
+  subscription_ids: string[];
 }
 
 export interface ReminderRecipientInput {
@@ -171,6 +172,11 @@ export function parseReminderSettingsInput(value: unknown) {
       days_before: daysBefore,
       enabled: group.enabled === true,
       recipients,
+      subscription_ids: Array.isArray(group.subscription_ids)
+        ? group.subscription_ids
+            .map((item) => cleanString(item, 80))
+            .filter(Boolean)
+        : [],
     };
   });
 

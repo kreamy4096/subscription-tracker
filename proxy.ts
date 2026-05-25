@@ -66,7 +66,11 @@ async function hasValidSession(request: NextRequest, secret: string) {
 }
 
 function isPublicPath(pathname: string) {
-  return pathname === "/login" || pathname === "/api/login";
+  return (
+    pathname === "/login" ||
+    pathname === "/api/login" ||
+    pathname === "/api/logout"
+  );
 }
 
 function apiUnauthorized() {
@@ -81,7 +85,9 @@ export async function proxy(request: NextRequest) {
     process.env.REMINDER_CRON_SECRET,
   ].filter(Boolean);
   const sessionSecret =
-    process.env.AUTH_SESSION_SECRET || process.env.CREDENTIAL_ENCRYPTION_KEY;
+    process.env.AUTH_SESSION_SECRET ||
+    process.env.CREDENTIAL_ENCRYPTION_KEY ||
+    process.env.ENCRYPTION_KEY;
   const authorization = request.headers.get("authorization");
   const pathname = request.nextUrl.pathname;
 

@@ -16,6 +16,11 @@ interface ReminderRecipientRow {
   sort_order: number;
 }
 
+interface ReminderGroupSubscriptionRow {
+  group_id: string;
+  subscription_id: string;
+}
+
 interface ZohoAccessTokenResponse {
   access_token?: string;
   error?: string;
@@ -188,7 +193,14 @@ async function getReminderGroups() {
      WHERE is_active = true
      ORDER BY sort_order ASC, created_at ASC, email ASC`,
   );
+  const groupSubscriptionsResult = await query(
+    `SELECT group_id, subscription_id
+     FROM reminder_group_subscriptions
+     ORDER BY group_id ASC, subscription_id ASC`,
+  );
   const recipients = recipientsResult.rows as ReminderRecipientRow[];
+  const groupSubscriptions =
+    groupSubscriptionsResult.rows as ReminderGroupSubscriptionRow[];
 
   if (groupsResult.rows.length > 0) {
     return (groupsResult.rows as ReminderGroupRow[]).map((group) => ({
@@ -203,6 +215,9 @@ async function getReminderGroups() {
           isPrimary: Boolean(recipient.is_primary),
           sortOrder: Number(recipient.sort_order ?? 0),
         })),
+      subscriptionIds: groupSubscriptions
+        .filter((item) => item.group_id === group.id)
+        .map((item) => item.subscription_id),
     }));
   }
 
@@ -230,6 +245,7 @@ async function getReminderGroups() {
           sortOrder: index,
         }))
         .filter((item) => item.email),
+      subscriptionIds: [],
     },
   ];
 }
@@ -551,8 +567,13 @@ export async function sendDueReminders() {
       group.recipients.find((recipient) => recipient.isPrimary)?.email ||
       recipientEmails[0];
     const ccEmails = recipientEmails.filter((email) => email !== primaryEmail);
+    const selectedSubscriptionIds = new Set(group.subscriptionIds ?? []);
+    const scopedSubscriptions =
+      selectedSubscriptionIds.size > 0
+        ? subscriptions.filter((item) => selectedSubscriptionIds.has(item.id))
+        : subscriptions;
 
-    const dueSoon = subscriptions.filter((item) => {
+    const dueSoon = scopedSubscriptions.filter((item) => {
       const trackableDueDate = item.next_due_date || item.due_date;
       const daysUntilDue = getDaysUntilDue(trackableDueDate, now);
       if (daysUntilDue === null) {

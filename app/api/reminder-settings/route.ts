@@ -14,6 +14,11 @@ interface ReminderRecipientRow {
   updated_at?: string;
 }
 
+interface ReminderGroupSubscriptionRow {
+  group_id: string;
+  subscription_id: string;
+}
+
 function isUuid(value: string | undefined) {
   return Boolean(
     value &&
@@ -73,10 +78,20 @@ async function getReminderSettingsPayload() {
      FROM reminder_recipients
      ORDER BY sort_order ASC, created_at ASC, email ASC`,
   );
+  const groupSubscriptionsResult = await query(
+    `SELECT group_id, subscription_id
+     FROM reminder_group_subscriptions
+     ORDER BY group_id ASC, subscription_id ASC`,
+  );
   const recipients = recipientsResult.rows as ReminderRecipientRow[];
+  const groupSubscriptions =
+    groupSubscriptionsResult.rows as ReminderGroupSubscriptionRow[];
   const groups = groupsResult.rows.map((group) => ({
     ...group,
     recipients: recipients.filter((recipient) => recipient.group_id === group.id),
+    subscription_ids: groupSubscriptions
+      .filter((item) => item.group_id === group.id)
+      .map((item) => item.subscription_id),
   }));
 
   return {
@@ -257,6 +272,26 @@ export async function POST(request: Request) {
           await client.query("DELETE FROM reminder_recipients WHERE group_id = $1", [
             groupId,
           ]);
+        }
+
+        const subscriptionIds = group.subscription_ids.filter((id) => isUuid(id));
+        if (subscriptionIds.length > 0) {
+          await client.query(
+            "DELETE FROM reminder_group_subscriptions WHERE group_id = $1",
+            [groupId],
+          );
+          await client.query(
+            `INSERT INTO reminder_group_subscriptions (group_id, subscription_id)
+             SELECT $1, subscription_id
+             FROM unnest($2::uuid[]) AS subscription_id
+             ON CONFLICT (group_id, subscription_id) DO NOTHING`,
+            [groupId, subscriptionIds],
+          );
+        } else {
+          await client.query(
+            "DELETE FROM reminder_group_subscriptions WHERE group_id = $1",
+            [groupId],
+          );
         }
       }
 

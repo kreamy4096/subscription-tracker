@@ -10,21 +10,21 @@ import {
 import ReminderSettingsModal from "@/components/ReminderSettingsModal";
 import SubscriptionModal from "@/components/SubscriptionModal";
 import ToastViewport, { type ToastMessage } from "@/components/ToastViewport";
+import {
+  buildMonthSummary,
+  buildMonthTrend,
+  formatCurrency,
+  getBudgetReport,
+} from "@/lib/budget";
 import type { Subscription } from "@/lib/subscription-types";
 
 const navItems = [
   { icon: "dashboard", label: "Overview" },
-  { icon: "payments", label: "Subscriptions" },
-  { icon: "receipt_long", label: "Billing" },
+  { icon: "savings", label: "Budget" },
   { icon: "monitoring", label: "Analytics" },
 ] as const;
 
 type DashboardTab = (typeof navItems)[number]["label"];
-
-const footerItems = [
-  { icon: "help_outline", label: "Support" },
-  { icon: "person", label: "Account" },
-];
 
 const seedSubscriptions: Subscription[] = [
   {
@@ -191,8 +191,13 @@ export default function Home() {
   const [openCredentialsId, setOpenCredentialsId] = useState<string | null>(null);
   const [popoverPasswordVisible, setPopoverPasswordVisible] = useState(false);
   const [statusSavingId, setStatusSavingId] = useState<string | null>(null);
+  const [isBudgetSending, setIsBudgetSending] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const credentialsPopoverRef = useRef<HTMLDivElement | null>(null);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
 
@@ -271,16 +276,23 @@ export default function Home() {
         setOpenCredentialsId(null);
         setPopoverPasswordVisible(false);
       }
+
+      if (
+        profileMenuRef.current &&
+        !profileMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsProfileMenuOpen(false);
+      }
     };
 
-    if (openCredentialsId) {
+    if (openCredentialsId || isProfileMenuOpen) {
       document.addEventListener("mousedown", handlePointerDown);
     }
 
     return () => {
       document.removeEventListener("mousedown", handlePointerDown);
     };
-  }, [openCredentialsId]);
+  }, [isProfileMenuOpen, openCredentialsId]);
 
   const filteredSubscriptions = subscriptions.filter((item) => {
     const matchesSearch =
@@ -323,8 +335,6 @@ export default function Home() {
   const notPaidSubscriptions = filteredSubscriptions.filter(
     (item) => item.payment_status === "Not Paid",
   ).length;
-  const averageSpend =
-    activeSubscriptions > 0 ? totalMonthlySpend / activeSubscriptions : 0;
   const nextDueSubscriptions = [...filteredSubscriptions]
     .sort(
       (first, second) =>
@@ -337,6 +347,37 @@ export default function Home() {
     { label: "Pending", value: pendingSubscriptions, color: "bg-warning" },
     { label: "Not Paid", value: notPaidSubscriptions, color: "bg-error" },
   ];
+  const budgetReport = getBudgetReport(subscriptions);
+  const nextMonthForecast = buildMonthSummary(
+    subscriptions,
+    new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1),
+  );
+  const monthTrend = buildMonthTrend(subscriptions);
+  const monthTrendMax = Math.max(
+    1,
+    ...monthTrend.map((item) => item.total),
+  );
+  const budgetChangeText =
+    budgetReport.changePercent === null
+      ? "No prior month comparison yet"
+      : `${budgetReport.changePercent >= 0 ? "+" : ""}${budgetReport.changePercent.toFixed(1)}% vs last month`;
+  const averageCurrentMonthCharge =
+    budgetReport.currentMonth.items.length > 0
+      ? budgetReport.currentMonth.total / budgetReport.currentMonth.items.length
+      : 0;
+
+  const pageTitle =
+    activeTab === "Overview"
+      ? "Dashboard Overview"
+      : activeTab === "Budget"
+        ? "Budget Planning"
+        : "Analytics";
+  const pageDescription =
+    activeTab === "Budget"
+      ? "Track last month's spend, forecast the new month, and send the monthly budget email."
+      : activeTab === "Analytics"
+        ? "Month-over-month subscription spending, trendlines, and upcoming billing pressure."
+        : "Manage your recurring expenses and service plans.";
 
   const handleOpenAdd = () => {
     setSelectedSubscription(null);
@@ -509,6 +550,85 @@ export default function Home() {
     setOpenCredentialsId(subscriptionId);
     setPopoverPasswordVisible(false);
   };
+
+  const openLogoutConfirm = () => {
+    setIsProfileMenuOpen(false);
+    setIsLogoutConfirmOpen(true);
+  };
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/logout", {
+        method: "POST",
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Unable to log out.");
+        showToast({
+          title: "Logout failed",
+          description: data.error || "Unable to log out.",
+          tone: "error",
+        });
+        return;
+      }
+
+      window.location.href = "/login";
+    } catch (logoutError) {
+      console.error("Failed to log out:", logoutError);
+      setError("A network error occurred while logging out.");
+      showToast({
+        title: "Logout failed",
+        description: "A network error occurred while logging out.",
+        tone: "error",
+      });
+    } finally {
+      setIsLoggingOut(false);
+      setIsProfileMenuOpen(false);
+      setIsLogoutConfirmOpen(false);
+    }
+  };
+
+  const handleSendBudgetEmail = async () => {
+    setIsBudgetSending(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/budget/send", {
+        method: "POST",
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Unable to send the budget report.");
+        showToast({
+          title: "Budget report not sent",
+          description: data.error || "Unable to send the budget report.",
+          tone: "error",
+        });
+        return;
+      }
+
+      showToast({
+        title: "Budget report sent",
+        description: `Delivered ${data.emailsSent ?? 0} monthly budget email${data.emailsSent === 1 ? "" : "s"}.`,
+        tone: "success",
+      });
+    } catch (budgetError) {
+      console.error("Failed to send budget report:", budgetError);
+      setError("A network error occurred while sending the budget report.");
+      showToast({
+        title: "Budget report not sent",
+        description: "A network error occurred while sending the budget report.",
+        tone: "error",
+      });
+    } finally {
+      setIsBudgetSending(false);
+    }
+  };
   return (
     <>
       <aside className="fixed top-0 left-0 z-50 hidden h-screen w-[240px] flex-col border-r border-surface-container-high bg-surface lg:flex">
@@ -559,16 +679,17 @@ export default function Home() {
         </div>
 
         <div className="pb-8">
-          {footerItems.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              className="flex w-full items-center gap-3 px-[21px] py-[9px] text-left text-secondary transition-colors duration-200 hover:bg-surface-container-low"
-            >
-              <span className="material-symbols-outlined">{item.icon}</span>
-              <span className="text-label-md">{item.label}</span>
-            </button>
-          ))}
+          <button
+            type="button"
+            onClick={openLogoutConfirm}
+            disabled={isLoggingOut}
+            className="flex w-full items-center gap-3 px-[21px] py-[9px] text-left text-secondary transition-colors duration-200 hover:bg-error-container hover:text-error active:bg-error active:text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <span className="material-symbols-outlined">logout</span>
+            <span className="text-label-md">
+              {isLoggingOut ? "Logging out..." : "Log Out"}
+            </span>
+          </button>
         </div>
       </aside>
 
@@ -579,13 +700,9 @@ export default function Home() {
               SubTrack Pro
             </p>
             <h2 className="mt-1 text-headline-lg-mobile font-semibold text-on-surface lg:text-headline-lg">
-              {activeTab === "Overview" ? "Dashboard Overview" : activeTab}
+              {pageTitle}
             </h2>
-            <p className="text-body-md text-secondary">
-              {activeTab === "Analytics"
-                ? "Subscription metrics calculated from the current dashboard data."
-                : "Manage your recurring expenses and service plans."}
-            </p>
+            <p className="text-body-md text-secondary">{pageDescription}</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -605,20 +722,39 @@ export default function Home() {
               <span className="material-symbols-outlined text-[18px]">add</span>
               Add Subscription
             </button>
-            <div className="hidden gap-2 sm:flex">
+            <div className="relative" ref={profileMenuRef}>
               <button
                 type="button"
-                onClick={() => setIsReminderSettingsOpen(true)}
-                className="rounded-full p-2 text-secondary transition-colors hover:bg-surface-container-high"
-                aria-label="Open reminder settings"
+                onClick={() => setIsProfileMenuOpen((current) => !current)}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-surface-container-high bg-surface-container-low text-[11px] font-semibold text-primary transition-colors hover:bg-surface-container-high"
+                aria-label="Open account menu"
               >
-                <span className="material-symbols-outlined text-[24px]">
-                  settings
-                </span>
+                AA
               </button>
-            </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-surface-container-high bg-surface-container-low text-[11px] font-semibold text-primary">
-              AA
+
+              {isProfileMenuOpen ? (
+                <div className="absolute top-[calc(100%+10px)] right-0 z-30 w-[220px] rounded-2xl border border-outline-variant bg-surface-container-lowest p-2 shadow-[0_18px_42px_rgba(25,28,29,0.12)]">
+                  <div className="rounded-xl px-3 py-3">
+                    <p className="text-label-md font-semibold text-on-surface">
+                      Account
+                    </p>
+                    <p className="mt-1 text-label-sm text-secondary">
+                      Sign out to require credentials on the next visit.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={openLogoutConfirm}
+                    disabled={isLoggingOut}
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-3 text-left text-body-md font-semibold text-error transition-colors hover:bg-error-container disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">
+                      logout
+                    </span>
+                    {isLoggingOut ? "Logging out..." : "Log Out"}
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
         </header>
@@ -709,82 +845,156 @@ export default function Home() {
         </section>
 
         {activeTab === "Analytics" ? (
-          <section className="grid gap-gutter xl:grid-cols-[1.2fr_0.8fr]">
-            <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-card-pad">
-              <div className="mb-6 flex items-center justify-between gap-4">
-                <div>
+          <section className="space-y-gutter">
+            <div className="grid gap-gutter xl:grid-cols-3">
+              <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-card-pad">
+                <p className="text-label-md tracking-wider text-secondary uppercase">
+                  Previous Month
+                </p>
+                <h3 className="mt-1 text-title-lg font-semibold text-on-surface">
+                  {formatCurrency(budgetReport.previousMonth.total)}
+                </h3>
+                <p className="mt-2 text-body-md text-secondary">
+                  {budgetReport.previousMonth.label}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-card-pad">
+                <p className="text-label-md tracking-wider text-secondary uppercase">
+                  Current Month
+                </p>
+                <h3 className="mt-1 text-title-lg font-semibold text-on-surface">
+                  {formatCurrency(budgetReport.currentMonth.total)}
+                </h3>
+                <p className="mt-2 text-body-md text-secondary">
+                  {budgetReport.currentMonth.items.length} scheduled charge
+                  {budgetReport.currentMonth.items.length === 1 ? "" : "s"}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-card-pad">
+                <p className="text-label-md tracking-wider text-secondary uppercase">
+                  Month-on-Month
+                </p>
+                <h3 className="mt-1 text-title-lg font-semibold text-on-surface">
+                  {formatCurrency(budgetReport.changeAmount)}
+                </h3>
+                <p className="mt-2 text-body-md text-secondary">
+                  {budgetChangeText}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-gutter xl:grid-cols-[1.15fr_0.85fr]">
+              <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-card-pad">
+                <div className="mb-6 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-label-md tracking-wider text-secondary uppercase">
+                      Six-Month Trend
+                    </p>
+                    <h3 className="mt-1 text-title-lg font-semibold text-on-surface">
+                      Month-over-month spend analysis
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void loadSubscriptions()}
+                    className="inline-flex items-center gap-2 rounded-lg border border-outline-variant ui-button-pad text-label-md text-secondary transition-colors hover:bg-surface-container-low"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">
+                      refresh
+                    </span>
+                    Refresh
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  {monthTrend.map((item) => (
+                    <div key={item.key}>
+                      <div className="mb-2 flex items-center justify-between gap-4">
+                        <span className="text-body-md font-semibold text-on-surface">
+                          {item.label}
+                        </span>
+                        <span className="text-body-md text-secondary">
+                          {formatCurrency(item.total)}
+                        </span>
+                      </div>
+                      <div className="h-3 overflow-hidden rounded-full bg-surface-container-high">
+                        <div
+                          className="h-full rounded-full bg-primary"
+                          style={{
+                            width: `${Math.max(6, (item.total / monthTrendMax) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-gutter">
+                <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-card-pad">
+                  <p className="text-label-md tracking-wider text-secondary uppercase">
+                    Spend Insight
+                  </p>
+                  <h3 className="mt-1 text-title-lg font-semibold text-on-surface">
+                    {formatCurrency(averageCurrentMonthCharge)} average scheduled charge
+                  </h3>
+                  <div className="mt-6 grid grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-surface-container-low ui-panel-pad">
+                      <p className="text-label-md text-secondary">This month</p>
+                      <p className="mt-2 text-[25px] font-semibold text-on-surface">
+                        {formatCurrency(budgetReport.currentMonth.total)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-surface-container-low ui-panel-pad">
+                      <p className="text-label-md text-secondary">Next month</p>
+                      <p className="mt-2 text-[25px] font-semibold text-on-surface">
+                        {formatCurrency(nextMonthForecast.total)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-card-pad">
                   <p className="text-label-md tracking-wider text-secondary uppercase">
                     Payment Status
                   </p>
                   <h3 className="mt-1 text-title-lg font-semibold text-on-surface">
                     Live subscription mix
                   </h3>
+                  <div className="mt-6 space-y-5">
+                    {spendByStatus.map((item) => {
+                      const percentage =
+                        activeSubscriptions > 0
+                          ? Math.round((item.value / activeSubscriptions) * 100)
+                          : 0;
+
+                      return (
+                        <div key={item.label}>
+                          <div className="mb-2 flex items-center justify-between text-body-md">
+                            <span className="font-semibold text-on-surface">
+                              {item.label}
+                            </span>
+                            <span className="text-secondary">
+                              {item.value} subscriptions - {percentage}%
+                            </span>
+                          </div>
+                          <div className="h-3 overflow-hidden rounded-full bg-surface-container-high">
+                            <div
+                              className={`h-full rounded-full ${item.color}`}
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => void loadSubscriptions()}
-                  className="inline-flex items-center gap-2 rounded-lg border border-outline-variant ui-button-pad text-label-md text-secondary transition-colors hover:bg-surface-container-low"
-                >
-                  <span className="material-symbols-outlined text-[18px]">
-                    refresh
-                  </span>
-                  Refresh
-                </button>
-              </div>
-
-              <div className="space-y-5">
-                {spendByStatus.map((item) => {
-                  const percentage =
-                    activeSubscriptions > 0
-                      ? Math.round((item.value / activeSubscriptions) * 100)
-                      : 0;
-
-                  return (
-                    <div key={item.label}>
-                      <div className="mb-2 flex items-center justify-between text-body-md">
-                        <span className="font-semibold text-on-surface">
-                          {item.label}
-                        </span>
-                        <span className="text-secondary">
-                          {item.value} subscriptions - {percentage}%
-                        </span>
-                      </div>
-                      <div className="h-3 overflow-hidden rounded-full bg-surface-container-high">
-                        <div
-                          className={`h-full rounded-full ${item.color}`}
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
             </div>
 
             <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-card-pad">
-              <p className="text-label-md tracking-wider text-secondary uppercase">
-                Spend Insight
-              </p>
-              <h3 className="mt-1 text-title-lg font-semibold text-on-surface">
-                ${averageSpend.toFixed(0)} average per subscription
-              </h3>
-              <div className="mt-6 grid grid-cols-2 gap-3">
-                <div className="rounded-xl bg-surface-container-low ui-panel-pad">
-                  <p className="text-label-md text-secondary">Tracked</p>
-                  <p className="mt-2 text-[25px] font-semibold text-on-surface">
-                    {activeSubscriptions}
-                  </p>
-                </div>
-                <div className="rounded-xl bg-surface-container-low ui-panel-pad">
-                  <p className="text-label-md text-secondary">Monthly</p>
-                  <p className="mt-2 text-[25px] font-semibold text-on-surface">
-                    ${totalMonthlySpend.toFixed(0)}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-card-pad xl:col-span-2">
               <div className="mb-4 flex items-center justify-between gap-4">
                 <div>
                   <p className="text-label-md tracking-wider text-secondary uppercase">
@@ -794,7 +1004,9 @@ export default function Home() {
                     Next due subscriptions
                   </h3>
                 </div>
-                <span className="text-label-sm text-success">Updates after dashboard actions</span>
+                <span className="text-label-sm text-success">
+                  Updates after dashboard actions
+                </span>
               </div>
 
               <div className="divide-y divide-surface-container-high">
@@ -843,6 +1055,178 @@ export default function Home() {
                     </div>
                   ))
                 )}
+              </div>
+            </div>
+          </section>
+        ) : activeTab === "Budget" ? (
+          <section className="space-y-gutter">
+            <div className="grid gap-gutter xl:grid-cols-3">
+              <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-card-pad">
+                <p className="text-label-md tracking-wider text-secondary uppercase">
+                  Last Month Spend
+                </p>
+                <h3 className="mt-1 text-title-lg font-semibold text-on-surface">
+                  {formatCurrency(budgetReport.previousMonth.total)}
+                </h3>
+                <p className="mt-2 text-body-md text-secondary">
+                  {budgetReport.previousMonth.label}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-card-pad">
+                <p className="text-label-md tracking-wider text-secondary uppercase">
+                  New Month Forecast
+                </p>
+                <h3 className="mt-1 text-title-lg font-semibold text-on-surface">
+                  {formatCurrency(budgetReport.currentMonth.total)}
+                </h3>
+                <p className="mt-2 text-body-md text-secondary">
+                  {budgetReport.currentMonth.label}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-card-pad">
+                <p className="text-label-md tracking-wider text-secondary uppercase">
+                  Send Monthly Report
+                </p>
+                <h3 className="mt-1 text-title-lg font-semibold text-on-surface">
+                  First day of every month
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => void handleSendBudgetEmail()}
+                  disabled={isBudgetSending}
+                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary ui-button-pad-lg text-label-md font-semibold text-on-primary transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <span className="material-symbols-outlined text-[18px]">
+                    {isBudgetSending ? "hourglass_top" : "send"}
+                  </span>
+                  {isBudgetSending ? "Sending..." : "Send Report Now"}
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-card-pad">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-label-md tracking-wider text-secondary uppercase">
+                    Budget Outlook
+                  </p>
+                  <h3 className="mt-1 text-title-lg font-semibold text-on-surface">
+                    {budgetChangeText}
+                  </h3>
+                </div>
+                <div className="rounded-full bg-primary-fixed ui-badge-pad text-label-sm font-semibold text-primary">
+                  Next month forecast: {formatCurrency(nextMonthForecast.total)}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-gutter xl:grid-cols-2">
+              <div className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest">
+                <div className="border-b border-surface-container-high ui-panel-pad">
+                  <p className="text-label-md tracking-wider text-secondary uppercase">
+                    Closed Month
+                  </p>
+                  <h3 className="mt-1 text-title-lg font-semibold text-on-surface">
+                    What was spent in {budgetReport.previousMonth.label}
+                  </h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[520px] border-collapse text-left">
+                    <thead>
+                      <tr className="bg-surface-container-low">
+                        {["Tool", "Plan", "Due Date", "Price"].map((heading) => (
+                          <th
+                            key={heading}
+                            className="ui-table-cell text-label-md tracking-wider text-secondary uppercase"
+                          >
+                            {heading}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-surface-container-high">
+                      {budgetReport.previousMonth.items.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="ui-table-empty text-center text-secondary">
+                            No subscription charges were tracked for this month.
+                          </td>
+                        </tr>
+                      ) : (
+                        budgetReport.previousMonth.items.map((item) => (
+                          <tr key={`${budgetReport.previousMonth.key}-${item.id}`}>
+                            <td className="ui-table-cell text-body-md font-semibold text-on-surface">
+                              {item.tool}
+                            </td>
+                            <td className="ui-table-cell text-body-md text-on-surface-variant">
+                              {item.subscription || "-"}
+                            </td>
+                            <td className="ui-table-cell text-body-md text-on-surface-variant">
+                              {formatDueDate(item.dueDate)}
+                            </td>
+                            <td className="ui-table-cell text-body-md font-semibold text-on-surface">
+                              {item.price || formatCurrency(item.amount)}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest">
+                <div className="border-b border-surface-container-high ui-panel-pad">
+                  <p className="text-label-md tracking-wider text-secondary uppercase">
+                    New Month
+                  </p>
+                  <h3 className="mt-1 text-title-lg font-semibold text-on-surface">
+                    What is scheduled for {budgetReport.currentMonth.label}
+                  </h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[520px] border-collapse text-left">
+                    <thead>
+                      <tr className="bg-surface-container-low">
+                        {["Tool", "Plan", "Due Date", "Price"].map((heading) => (
+                          <th
+                            key={heading}
+                            className="ui-table-cell text-label-md tracking-wider text-secondary uppercase"
+                          >
+                            {heading}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-surface-container-high">
+                      {budgetReport.currentMonth.items.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="ui-table-empty text-center text-secondary">
+                            No subscription charges are scheduled for this month.
+                          </td>
+                        </tr>
+                      ) : (
+                        budgetReport.currentMonth.items.map((item) => (
+                          <tr key={`${budgetReport.currentMonth.key}-${item.id}`}>
+                            <td className="ui-table-cell text-body-md font-semibold text-on-surface">
+                              {item.tool}
+                            </td>
+                            <td className="ui-table-cell text-body-md text-on-surface-variant">
+                              {item.subscription || "-"}
+                            </td>
+                            <td className="ui-table-cell text-body-md text-on-surface-variant">
+                              {formatDueDate(item.dueDate)}
+                            </td>
+                            <td className="ui-table-cell text-body-md font-semibold text-on-surface">
+                              {item.price || formatCurrency(item.amount)}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </section>
@@ -1113,6 +1497,41 @@ export default function Home() {
         onClose={() => setIsReminderSettingsOpen(false)}
         onNotify={showToast}
       />
+      {isLogoutConfirmOpen ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-inverse-surface/20 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[20px] border border-outline-variant bg-surface-container-lowest p-[21px] shadow-2xl">
+            <p className="text-label-md font-medium tracking-[0.18em] text-error uppercase">
+              Confirm Logout
+            </p>
+            <h3 className="mt-2 text-[25px] font-semibold text-on-surface">
+              Log out of SubTrack Pro?
+            </h3>
+            <p className="mt-3 text-body-md text-on-surface-variant">
+              Your current session will end immediately, and you’ll need to enter
+              your credentials again to sign back in.
+            </p>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsLogoutConfirmOpen(false)}
+                disabled={isLoggingOut}
+                className="rounded-xl border border-outline-variant ui-button-pad-lg text-label-md font-semibold text-secondary transition-colors hover:bg-surface-container-low disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleLogout()}
+                disabled={isLoggingOut}
+                className="rounded-xl bg-error px-[21px] py-[11px] text-label-md font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isLoggingOut ? "Logging out..." : "Yes, Log Out"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <ToastViewport messages={toasts} onDismiss={dismissToast} />
     </>
   );

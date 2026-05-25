@@ -5,6 +5,7 @@ import type {
   ReminderGroup,
   ReminderRecipient,
   ReminderSettings,
+  Subscription,
 } from "@/lib/subscription-types";
 
 interface ReminderSettingsModalProps {
@@ -31,6 +32,7 @@ type GroupDraft = Pick<
 > & {
   id: string;
   recipients: RecipientDraft[];
+  subscription_ids: string[];
 };
 
 function makeDraftId(prefix: string) {
@@ -60,6 +62,7 @@ function normalizeGroups(data: ReminderSettings & { groups?: ReminderGroup[] }) 
       days_before: group.days_before ?? data.days_before ?? 3,
       enabled: group.enabled ?? data.enabled ?? true,
       recipients: normalizeRecipients(group.recipients),
+      subscription_ids: group.subscription_ids ?? [],
     }));
   }
 
@@ -83,6 +86,7 @@ function normalizeGroups(data: ReminderSettings & { groups?: ReminderGroup[] }) 
       days_before: data.days_before ?? 3,
       enabled: data.enabled ?? true,
       recipients: normalizeRecipients(recipients),
+      subscription_ids: [],
     },
   ];
 }
@@ -118,9 +122,13 @@ export default function ReminderSettingsModal({
   onNotify,
 }: ReminderSettingsModalProps) {
   const [groups, setGroups] = useState<GroupDraft[]>([]);
+  const [availableSubscriptions, setAvailableSubscriptions] = useState<
+    Pick<Subscription, "id" | "tool" | "subscription" | "price">[]
+  >([]);
   const [activeGroupId, setActiveGroupId] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [addAsPrimary, setAddAsPrimary] = useState(false);
+  const [isSubscriptionPickerOpen, setIsSubscriptionPickerOpen] = useState(false);
   const [draggedRecipientId, setDraggedRecipientId] = useState<string | null>(
     null,
   );
@@ -145,10 +153,14 @@ export default function ReminderSettingsModal({
       setError("");
 
       try {
-        const res = await fetch("/api/reminder-settings");
-        const data = await res.json();
+        const [settingsRes, subscriptionsRes] = await Promise.all([
+          fetch("/api/reminder-settings"),
+          fetch("/api/subscriptions"),
+        ]);
+        const data = await settingsRes.json();
+        const subscriptionsData = await subscriptionsRes.json();
 
-        if (!res.ok) {
+        if (!settingsRes.ok) {
           setError(data.error || "Unable to load reminder settings.");
           onNotify?.({
             title: "Reminder settings not loaded",
@@ -156,6 +168,12 @@ export default function ReminderSettingsModal({
             tone: "error",
           });
           return;
+        }
+
+        if (subscriptionsRes.ok && Array.isArray(subscriptionsData)) {
+          setAvailableSubscriptions(subscriptionsData);
+        } else {
+          setAvailableSubscriptions([]);
         }
 
         const normalizedGroups = normalizeGroups(data);
@@ -194,6 +212,7 @@ export default function ReminderSettingsModal({
       days_before: 3,
       enabled: true,
       recipients: [],
+      subscription_ids: [],
     };
     setGroups((current) => [...current, nextGroup]);
     setActiveGroupId(nextGroup.id);
@@ -373,6 +392,45 @@ export default function ReminderSettingsModal({
       description: "The CC order was changed.",
       tone: "info",
     });
+  };
+
+  const handleToggleSubscription = (subscriptionId: string) => {
+    if (!activeGroup) {
+      return;
+    }
+
+    const subscription = availableSubscriptions.find(
+      (item) => item.id === subscriptionId,
+    );
+    const isSelected = activeGroup.subscription_ids.includes(subscriptionId);
+
+    updateActiveGroup((group) => ({
+      ...group,
+      subscription_ids: isSelected
+        ? group.subscription_ids.filter((id) => id !== subscriptionId)
+        : [...group.subscription_ids, subscriptionId],
+    }));
+    onNotify?.({
+      title: isSelected ? "Subscription removed" : "Subscription added",
+      description: `${subscription?.tool || "Subscription"} ${
+        isSelected ? "will no longer" : "will now"
+      } trigger reminders for ${activeGroup.name}.`,
+      tone: "info",
+    });
+  };
+
+  const handleSelectAllSubscriptions = () => {
+    updateActiveGroup((group) => ({
+      ...group,
+      subscription_ids: availableSubscriptions.map((item) => item.id),
+    }));
+  };
+
+  const handleClearSubscriptions = () => {
+    updateActiveGroup((group) => ({
+      ...group,
+      subscription_ids: [],
+    }));
   };
 
   const handleSave = async (event: React.FormEvent) => {
@@ -599,6 +657,31 @@ export default function ReminderSettingsModal({
                       </button>
                     </div>
 
+                    <div className="mt-[13px] rounded-xl border border-outline-variant bg-surface-container-low ui-panel-pad">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-label-md font-semibold text-on-surface">
+                            Subscription scope
+                          </p>
+                          <p className="mt-1 text-label-sm text-secondary">
+                            {activeGroup.subscription_ids.length > 0
+                              ? `${activeGroup.subscription_ids.length} selected subscription${activeGroup.subscription_ids.length === 1 ? "" : "s"}`
+                              : "All subscriptions will trigger this group"}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsSubscriptionPickerOpen(true)}
+                          className="inline-flex items-center gap-2 rounded-lg border border-outline-variant ui-button-pad text-label-md font-semibold text-secondary transition-colors hover:bg-surface-container-high"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">
+                            checklist
+                          </span>
+                          Choose Subscriptions
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="mt-[13px] overflow-hidden rounded-xl border border-outline-variant">
                       {activeGroup.recipients.length === 0 ? (
                         <div className="bg-surface-container-lowest p-[21px] text-center text-body-md text-secondary">
@@ -742,6 +825,112 @@ export default function ReminderSettingsModal({
             </>
           )}
         </form>
+
+        {isSubscriptionPickerOpen && activeGroup ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-inverse-surface/20 p-6 backdrop-blur-sm">
+            <div className="flex max-h-[calc(100svh-5rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[20px] border border-outline-variant bg-surface-container-lowest shadow-2xl">
+              <div className="flex items-start justify-between border-b border-surface-container-high px-[29px] py-[21px]">
+                <div>
+                  <p className="text-label-md font-medium tracking-[0.18em] text-secondary uppercase">
+                    Subscription Picker
+                  </p>
+                  <h3 className="mt-2 text-[25px] font-semibold text-on-surface">
+                    Choose reminder subscriptions
+                  </h3>
+                  <p className="mt-2 text-body-md text-on-surface-variant">
+                    Pick which subscriptions should trigger reminders for {activeGroup.name}.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsSubscriptionPickerOpen(false)}
+                  className="rounded-full p-2 text-secondary transition-colors hover:bg-surface-container-low hover:text-on-surface"
+                  aria-label="Close subscription picker"
+                >
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between gap-3 border-b border-surface-container-high px-[29px] py-[13px]">
+                <div className="text-body-md text-secondary">
+                  {activeGroup.subscription_ids.length > 0
+                    ? `${activeGroup.subscription_ids.length} selected`
+                    : "No selection: all subscriptions"}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSelectAllSubscriptions}
+                    className="rounded-lg border border-outline-variant ui-button-pad text-label-md font-semibold text-secondary transition-colors hover:bg-surface-container-low"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClearSubscriptions}
+                    className="rounded-lg border border-outline-variant ui-button-pad text-label-md font-semibold text-secondary transition-colors hover:bg-surface-container-low"
+                  >
+                    Use All
+                  </button>
+                </div>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto px-[29px] py-[21px]">
+                {availableSubscriptions.length === 0 ? (
+                  <div className="rounded-xl border border-outline-variant bg-surface-container-low p-[21px] text-center text-body-md text-secondary">
+                    No subscriptions are available yet.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {availableSubscriptions.map((subscription) => {
+                      const isChecked = activeGroup.subscription_ids.includes(
+                        subscription.id,
+                      );
+
+                      return (
+                        <label
+                          key={subscription.id}
+                          className={`flex cursor-pointer items-center gap-3 rounded-xl border px-[13px] py-[11px] transition-colors ${
+                            isChecked
+                              ? "border-primary bg-primary-fixed"
+                              : "border-outline-variant bg-surface-container-low hover:bg-surface-container-high"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleToggleSubscription(subscription.id)}
+                            className="h-4 w-4 accent-primary"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-body-md font-semibold text-on-surface">
+                              {subscription.tool}
+                            </p>
+                            <p className="truncate text-label-sm text-secondary">
+                              {subscription.subscription || "No plan"} · {subscription.price || "-"}
+                            </p>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-surface-container-high px-[29px] py-[21px]">
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsSubscriptionPickerOpen(false)}
+                    className="rounded-xl border border-outline-variant ui-button-pad-lg text-label-md font-semibold text-secondary transition-colors hover:bg-surface-container-low"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

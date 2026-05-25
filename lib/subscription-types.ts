@@ -29,6 +29,7 @@ export interface ReminderGroup {
   days_before: number;
   enabled: boolean;
   recipients: ReminderRecipient[];
+  subscription_ids?: string[];
   created_at?: string;
   updated_at?: string;
 }

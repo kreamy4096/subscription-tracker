@@ -5,6 +5,7 @@ import { useState } from "react";
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -65,14 +66,26 @@ export default function LoginPage() {
             <span className="mb-2 block text-label-md font-semibold text-on-surface">
               Password
             </span>
-            <input
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="h-11 w-full rounded-lg border border-outline-variant bg-surface-container-low ui-control-pad text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
-              autoComplete="current-password"
-              type="password"
-              required
-            />
+            <div className="relative">
+              <input
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="h-11 w-full rounded-lg border border-outline-variant bg-surface-container-low px-[13px] pr-11 text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                autoComplete="current-password"
+                type={showPassword ? "text" : "password"}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((current) => !current)}
+                className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-1 text-secondary transition-colors hover:bg-surface-container-high hover:text-on-surface"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  {showPassword ? "visibility_off" : "visibility"}
+                </span>
+              </button>
+            </div>
           </label>
 
           {error ? (

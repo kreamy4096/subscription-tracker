@@ -187,6 +187,15 @@ export async function initDb() {
     `);
 
     await activePool.query(`
+      CREATE TABLE IF NOT EXISTS reminder_group_subscriptions (
+        group_id UUID NOT NULL,
+        subscription_id UUID NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT now(),
+        PRIMARY KEY (group_id, subscription_id)
+      );
+    `);
+
+    await activePool.query(`
       ALTER TABLE reminder_recipients
         ADD COLUMN IF NOT EXISTS group_id UUID,
         ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true,
@@ -217,6 +226,32 @@ export async function initDb() {
             ADD CONSTRAINT reminder_recipients_group_id_fkey
             FOREIGN KEY (group_id)
             REFERENCES reminder_groups(id)
+            ON DELETE CASCADE;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'reminder_group_subscriptions_group_id_fkey'
+            AND conrelid = 'reminder_group_subscriptions'::regclass
+        ) THEN
+          ALTER TABLE reminder_group_subscriptions
+            ADD CONSTRAINT reminder_group_subscriptions_group_id_fkey
+            FOREIGN KEY (group_id)
+            REFERENCES reminder_groups(id)
+            ON DELETE CASCADE;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'reminder_group_subscriptions_subscription_id_fkey'
+            AND conrelid = 'reminder_group_subscriptions'::regclass
+        ) THEN
+          ALTER TABLE reminder_group_subscriptions
+            ADD CONSTRAINT reminder_group_subscriptions_subscription_id_fkey
+            FOREIGN KEY (subscription_id)
+            REFERENCES subscriptions(id)
             ON DELETE CASCADE;
         END IF;
       END $$;

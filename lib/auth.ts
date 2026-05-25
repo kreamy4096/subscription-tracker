@@ -30,12 +30,13 @@ function unauthorized() {
 function getSessionSecret() {
   const secret = process.env.AUTH_SESSION_SECRET;
   const encryptionKey = process.env.CREDENTIAL_ENCRYPTION_KEY;
+  const legacyEncryptionKey = process.env.ENCRYPTION_KEY;
 
-  if (!secret && !encryptionKey) {
+  if (!secret && !encryptionKey && !legacyEncryptionKey) {
     return null;
   }
 
-  return secret || encryptionKey;
+  return secret || encryptionKey || legacyEncryptionKey;
 }
 
 function signSessionPayload(payload: string) {
