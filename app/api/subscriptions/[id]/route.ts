@@ -4,7 +4,7 @@ import { requireBasicAuth } from "@/lib/auth";
 import { encryptCredential } from "@/lib/credentials";
 import { query } from "@/lib/db";
 import { serializeSubscriptionRow } from "@/lib/subscription-serialization";
-import { addBillingCycle } from "@/lib/subscription-dates";
+import { addBillingCycle, getAutomaticPaymentStatus } from "@/lib/subscription-dates";
 
 export async function PUT(
   request: Request,
@@ -72,7 +72,14 @@ export async function PUT(
       ? addBillingCycle(nextDueDateValue || next_due_date || due_date, billing_type)
       : next_due_date;
     const savedDueDate = shouldAdvanceRecurringCycle ? savedNextDueDate : due_date;
-    const savedPaymentStatus = shouldAdvanceRecurringCycle ? "Pending" : payment_status;
+    const savedPaymentStatus = shouldAdvanceRecurringCycle
+      ? "Paid"
+      : payment_status === "Paid"
+        ? getAutomaticPaymentStatus(
+            next_due_date || due_date,
+            payment_status,
+          )
+        : payment_status;
 
     const result = await query(
       `UPDATE subscriptions SET

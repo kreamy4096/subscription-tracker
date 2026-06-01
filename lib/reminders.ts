@@ -352,23 +352,29 @@ function buildReminderEmail(subscriptions: Subscription[]) {
   const planRows = subscriptions
     .map(
       (item) => `
-        <tr>
-          <td class="plan-row" style="padding:12px 0;border-bottom:1px solid rgba(82,139,198,0.28);">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
-              <tr>
-                <td style="padding-right:12px;">
-                  <div class="plan-title" style="font-size:16px;line-height:22px;color:#ffffff;font-weight:700;">${escapeHtml(item.tool || "-")}</div>
-                  <div class="muted-text" style="font-size:13px;line-height:20px;color:#b6c6de;">${escapeHtml(item.subscription || "Subscription")}</div>
-                  <div class="status-text" style="font-size:12px;line-height:20px;color:#41d884;">${escapeHtml(item.payment_status || "Reminder pending")}</div>
-                </td>
-                <td width="118" align="right" valign="top">
-                  <div class="amount-text" style="font-size:17px;line-height:24px;color:#ffffff;font-weight:700;">${escapeHtml(item.price || "-")}</div>
-                  <div class="small-muted" style="font-size:12px;line-height:18px;color:#b6c6de;">${escapeHtml(formatReminderDate(item.next_due_date || item.due_date))}</div>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>`,
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:0;border:1px solid rgba(104,160,224,0.35);border-radius:12px;background:#05274d;margin-bottom:12px;">
+          <tr>
+            <td style="padding:16px 16px 8px;">
+              <div class="plan-title" style="font-size:16px;line-height:22px;color:#ffffff;font-weight:700;">${escapeHtml(item.tool || "-")}</div>
+              <div class="muted-text" style="font-size:13px;line-height:20px;color:#b6c6de;">${escapeHtml(item.subscription || "Subscription")}</div>
+              <div class="status-text" style="font-size:12px;line-height:20px;color:#41d884;">${escapeHtml(item.payment_status || "Reminder pending")}</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 16px 16px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                <tr>
+                  <td style="padding:0 0 8px;font-size:11px;line-height:16px;letter-spacing:0.08em;text-transform:uppercase;color:#89a5ca;">Due Date</td>
+                  <td align="right" style="padding:0 0 8px;font-size:11px;line-height:16px;letter-spacing:0.08em;text-transform:uppercase;color:#89a5ca;">Price</td>
+                </tr>
+                <tr>
+                  <td style="padding:0;font-size:15px;line-height:22px;color:#ffffff;">${escapeHtml(formatReminderDate(item.next_due_date || item.due_date))}</td>
+                  <td align="right" style="padding:0;font-size:16px;line-height:22px;color:#ffffff;font-weight:700;">${escapeHtml(item.price || "-")}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>`,
     )
     .join("");
 
@@ -397,6 +403,9 @@ function buildReminderEmail(subscriptions: Subscription[]) {
           .cta-button { font-size: 17px !important; line-height: 22px !important; padding: 15px 18px !important; }
           .help-cell { padding: 16px !important; }
           .footer-cell { padding: 20px 18px !important; font-size: 12px !important; line-height: 20px !important; }
+          .stack-table, .stack-table tbody, .stack-table tr, .stack-table td { display: block !important; width: 100% !important; }
+          .stack-divider { display: none !important; }
+          .stack-cell { padding: 14px 18px !important; }
         }
       </style>
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;background:#00152f;background-image:radial-gradient(circle at 50% 0,#053d72 0,#00152f 58%);font-family:Inter,Arial,sans-serif;color:#ffffff;">
@@ -431,13 +440,13 @@ function buildReminderEmail(subscriptions: Subscription[]) {
                     <tr>
                       <td class="panel-title panel-pad" colspan="3" style="padding:20px 20px 6px;font-size:20px;line-height:28px;font-weight:800;color:#ffffff;">Renewal details</td>
                     </tr>
-                    <tr>
-                      <td style="padding:14px 20px 22px;">
+                    <tr class="stack-table">
+                      <td class="stack-cell" style="padding:14px 20px 22px;">
                         <div class="detail-label" style="font-size:14px;line-height:21px;color:#b6c6de;">Renewal date</div>
                         <div class="detail-value" style="margin-top:5px;font-size:22px;line-height:30px;font-weight:800;color:#ffffff;">${escapeHtml(formatReminderDate(primarySubscription?.next_due_date || primarySubscription?.due_date))}</div>
                       </td>
-                      <td width="1" style="background:rgba(182,198,222,0.45);"></td>
-                      <td style="padding:14px 20px 22px;">
+                      <td class="stack-divider" width="1" style="background:rgba(182,198,222,0.45);"></td>
+                      <td class="stack-cell" style="padding:14px 20px 22px;">
                         <div class="detail-label" style="font-size:14px;line-height:21px;color:#b6c6de;">Amount</div>
                         <div class="detail-value" style="margin-top:5px;font-size:22px;line-height:30px;font-weight:800;color:#ffffff;">${amountLabel}</div>
                       </td>
@@ -454,9 +463,7 @@ function buildReminderEmail(subscriptions: Subscription[]) {
                     </tr>
                     <tr>
                       <td class="plan-table-pad" style="padding:0 20px 8px;">
-                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
-                          ${planRows}
-                        </table>
+                        ${planRows}
                       </td>
                     </tr>
                   </table>

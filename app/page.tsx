@@ -171,8 +171,26 @@ function getAvatarClasses(tool: string) {
   return avatarBackgrounds[sum % avatarBackgrounds.length];
 }
 
-function getDueDateTime(value: string | null | undefined) {
-  return parseDueDate(value)?.getTime() ?? Number.POSITIVE_INFINITY;
+function getStartOfToday() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
+}
+
+function formatDueGroupLabel(date: Date) {
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 export default function Home() {
@@ -335,13 +353,55 @@ export default function Home() {
   const notPaidSubscriptions = filteredSubscriptions.filter(
     (item) => item.payment_status === "Not Paid",
   ).length;
-  const nextDueSubscriptions = [...filteredSubscriptions]
-    .sort(
-      (first, second) =>
-        getDueDateTime(first.next_due_date || first.due_date) -
-        getDueDateTime(second.next_due_date || second.due_date),
+  const startOfToday = getStartOfToday();
+  const upcomingDueEntries = subscriptions
+    .map((item) => {
+      const dueDate = parseDueDate(item.next_due_date || item.due_date);
+
+      if (!dueDate) {
+        return null;
+      }
+
+      dueDate.setHours(0, 0, 0, 0);
+
+      return {
+        subscription: item,
+        dueDate,
+      };
+    })
+    .filter(
+      (
+        entry,
+      ): entry is { subscription: Subscription; dueDate: Date } =>
+        Boolean(entry),
     )
-    .slice(0, 5);
+    .filter(
+      (entry) =>
+        entry.subscription.payment_status !== "Paid" &&
+        entry.dueDate.getTime() >= startOfToday.getTime(),
+    )
+    .sort((first, second) => first.dueDate.getTime() - second.dueDate.getTime());
+  const nextDueGroups = upcomingDueEntries.reduce<
+    Array<{
+      label: string;
+      items: Array<{ subscription: Subscription; dueDate: Date }>;
+    }>
+  >((groups, entry) => {
+    const label = formatDueGroupLabel(entry.dueDate);
+    const existingGroup = groups[groups.length - 1];
+
+    if (existingGroup && existingGroup.label === label) {
+      existingGroup.items.push(entry);
+      return groups;
+    }
+
+    groups.push({
+      label,
+      items: [entry],
+    });
+    return groups;
+  }, []);
+  const nextDueCount = upcomingDueEntries.length;
   const spendByStatus = [
     { label: "Paid", value: paidSubscriptions, color: "bg-success" },
     { label: "Pending", value: pendingSubscriptions, color: "bg-warning" },
@@ -628,6 +688,86 @@ export default function Home() {
     } finally {
       setIsBudgetSending(false);
     }
+  };
+
+  const handleDownloadNextDue = () => {
+    const sections = nextDueGroups
+      .map((group) => {
+        const rows = group.items
+          .map(
+            ({ subscription }) => `
+              <tr>
+                <td style="padding:14px 16px;border-bottom:1px solid #e5e7eb;">${escapeHtml(subscription.tool || "-")}</td>
+                <td style="padding:14px 16px;border-bottom:1px solid #e5e7eb;">${escapeHtml(subscription.subscription || "-")}</td>
+                <td style="padding:14px 16px;border-bottom:1px solid #e5e7eb;">${escapeHtml(formatDueDate(subscription.next_due_date || subscription.due_date))}</td>
+                <td style="padding:14px 16px;border-bottom:1px solid #e5e7eb;">${escapeHtml(subscription.price || "-")}</td>
+                <td style="padding:14px 16px;border-bottom:1px solid #e5e7eb;">${escapeHtml(subscription.payment_status || "Not Paid")}</td>
+              </tr>`,
+          )
+          .join("");
+
+        return `
+          <section style="margin-top:24px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px;">
+              <h2 style="margin:0;font-size:18px;line-height:1.3;color:#111827;">${escapeHtml(group.label)}</h2>
+              <span style="display:inline-flex;align-items:center;border-radius:999px;background:#eef2ff;color:#4338ca;padding:6px 12px;font-size:12px;font-weight:600;">
+                ${group.items.length} due
+              </span>
+            </div>
+            <table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;background:#ffffff;">
+              <thead>
+                <tr style="background:#f8fafc;text-align:left;">
+                  <th style="padding:12px 16px;color:#64748b;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Tool</th>
+                  <th style="padding:12px 16px;color:#64748b;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Plan</th>
+                  <th style="padding:12px 16px;color:#64748b;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Due Date</th>
+                  <th style="padding:12px 16px;color:#64748b;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Price</th>
+                  <th style="padding:12px 16px;color:#64748b;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Status</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </section>`;
+      })
+      .join("");
+    const html = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SubTrack Pro Next Due Report</title>
+  </head>
+  <body style="margin:0;padding:24px;background:#eef2ff;font-family:Inter,Arial,sans-serif;color:#111827;">
+    <div style="max-width:960px;margin:0 auto;background:#ffffff;border:1px solid #dbe4ff;border-radius:20px;overflow:hidden;box-shadow:0 25px 60px rgba(79,70,229,0.12);">
+      <div style="background:#6366f1;padding:28px 32px;color:#ffffff;">
+        <div style="font-size:12px;letter-spacing:0.14em;text-transform:uppercase;opacity:0.85;">SubTrack Pro</div>
+        <h1 style="margin:10px 0 0;font-size:30px;line-height:1.2;">Next Due Subscriptions</h1>
+        <p style="margin:12px 0 0;font-size:15px;line-height:1.6;color:#e0e7ff;">
+          Generated on ${escapeHtml(new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }))} for management review. This report only includes unpaid subscriptions due from today onward.
+        </p>
+      </div>
+      <div style="padding:28px 32px;">
+        ${
+          sections ||
+          `<div style="padding:16px;border:1px solid #e5e7eb;border-radius:14px;color:#64748b;">No due subscriptions available right now.</div>`
+        }
+      </div>
+    </div>
+  </body>
+</html>`;
+    const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `subtrack-next-due-${new Date().toISOString().slice(0, 10)}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast({
+      title: "Next due list downloaded",
+      description: "The due subscriptions report is ready to share.",
+      tone: "success",
+    });
   };
   return (
     <>
@@ -1003,10 +1143,25 @@ export default function Home() {
                   <h3 className="mt-1 text-title-lg font-semibold text-on-surface">
                     Next due subscriptions
                   </h3>
+                  <p className="mt-2 text-body-md text-secondary">
+                    Global upcoming list from today onward, excluding paid subscriptions.
+                  </p>
                 </div>
-                <span className="text-label-sm text-success">
-                  Updates after dashboard actions
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-label-sm text-success">
+                    {nextDueCount} subscription{nextDueCount === 1 ? "" : "s"} due
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleDownloadNextDue}
+                    className="inline-flex items-center gap-2 rounded-lg border border-outline-variant ui-button-pad text-label-md text-secondary transition-colors hover:bg-surface-container-low"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">
+                      download
+                    </span>
+                    Download
+                  </button>
+                </div>
               </div>
 
               <div className="divide-y divide-surface-container-high">
@@ -1014,44 +1169,65 @@ export default function Home() {
                   <p className="py-8 text-center text-body-md text-secondary">
                     Loading analytics...
                   </p>
-                ) : nextDueSubscriptions.length === 0 ? (
+                ) : nextDueGroups.length === 0 ? (
                   <p className="py-8 text-center text-body-md text-secondary">
-                    No live subscriptions available yet.
+                    No unpaid subscriptions are due from today onward.
                   </p>
                 ) : (
-                  nextDueSubscriptions.map((item) => (
-                    <div
-                      key={item.id}
-                      className="grid gap-3 py-4 md:grid-cols-[1fr_140px_120px_120px] md:items-center"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`flex h-[30px] w-[30px] items-center justify-center rounded-lg text-[10px] font-semibold ${getAvatarClasses(item.tool)}`}
-                        >
-                          {item.tool.slice(0, 1).toUpperCase()}
-                        </div>
+                  nextDueGroups.map((group) => (
+                    <div key={group.label} className="py-4">
+                      <div className="mb-4 flex items-center justify-between gap-3">
                         <div>
-                          <p className="text-body-md font-semibold text-on-surface">
-                            {item.tool}
-                          </p>
-                          <p className="text-label-md text-secondary">
-                            {item.subscription || "-"}
+                          <h4 className="text-title-md font-semibold text-on-surface">
+                            {group.label}
+                          </h4>
+                          <p className="text-body-sm text-secondary">
+                            {group.items.length} upcoming subscription
+                            {group.items.length === 1 ? "" : "s"}
                           </p>
                         </div>
+                        <span className="rounded-full bg-primary-fixed px-3 py-1 text-label-sm font-semibold text-primary">
+                          {group.items.length} due
+                        </span>
                       </div>
-                      <p className="text-body-md text-on-surface-variant">
-                        {formatDueDate(item.next_due_date || item.due_date)}
-                      </p>
-                      <p className="text-body-md font-semibold text-on-surface">
-                        {item.price || "-"}
-                      </p>
-                      <span
-                        className={`w-fit rounded-full ui-badge-pad text-label-sm font-semibold ${getStatusBadgeClasses(
-                          item.payment_status || "Not Paid",
-                        )}`}
-                      >
-                        {item.payment_status || "Not Paid"}
-                      </span>
+
+                      <div className="divide-y divide-surface-container-high">
+                        {group.items.map(({ subscription: item }) => (
+                          <div
+                            key={item.id}
+                            className="grid gap-3 py-4 md:grid-cols-[1fr_140px_120px_120px] md:items-center"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div
+                                className={`flex h-[30px] w-[30px] items-center justify-center rounded-lg text-[10px] font-semibold ${getAvatarClasses(item.tool)}`}
+                              >
+                                {item.tool.slice(0, 1).toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="text-body-md font-semibold text-on-surface">
+                                  {item.tool}
+                                </p>
+                                <p className="text-label-md text-secondary">
+                                  {item.subscription || "-"}
+                                </p>
+                              </div>
+                            </div>
+                            <p className="text-body-md text-on-surface-variant">
+                              {formatDueDate(item.next_due_date || item.due_date)}
+                            </p>
+                            <p className="text-body-md font-semibold text-on-surface">
+                              {item.price || "-"}
+                            </p>
+                            <span
+                              className={`w-fit rounded-full ui-badge-pad text-label-sm font-semibold ${getStatusBadgeClasses(
+                                item.payment_status || "Not Paid",
+                              )}`}
+                            >
+                              {item.payment_status || "Not Paid"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   ))
                 )}

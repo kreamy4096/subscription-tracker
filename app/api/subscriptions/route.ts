@@ -4,6 +4,7 @@ import { requireBasicAuth } from "@/lib/auth";
 import { encryptCredential } from "@/lib/credentials";
 import { query } from "@/lib/db";
 import { serializeSubscriptionRow } from "@/lib/subscription-serialization";
+import { getAutomaticPaymentStatus } from "@/lib/subscription-dates";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,35 @@ export async function GET(request: Request) {
   }
 
   try {
+    const statusSyncResult = await query(
+      `SELECT id, next_due_date, due_date, payment_status
+       FROM subscriptions`,
+    );
+
+    await Promise.all(
+      statusSyncResult.rows.map(async (row) => {
+        const nextDueDate =
+          typeof row.next_due_date === "string"
+            ? row.next_due_date.slice(0, 10)
+            : row.next_due_date instanceof Date
+              ? row.next_due_date.toISOString().slice(0, 10)
+              : typeof row.due_date === "string"
+                ? row.due_date
+                : "";
+        const nextStatus = getAutomaticPaymentStatus(
+          nextDueDate,
+          String(row.payment_status ?? ""),
+        );
+
+        if (nextStatus !== String(row.payment_status ?? "")) {
+          await query(
+            "UPDATE subscriptions SET payment_status = $1 WHERE id = $2",
+            [nextStatus, row.id],
+          );
+        }
+      }),
+    );
+
     const result = await query(
       `SELECT
         id,

@@ -58,3 +58,42 @@ export function getReminderStartDate(nextDueDate: string, daysBefore: number) {
   date.setUTCDate(date.getUTCDate() - daysBefore);
   return date.toISOString().slice(0, 10);
 }
+
+function startOfUtcDay(value: Date) {
+  return new Date(
+    Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()),
+  );
+}
+
+export function diffInDaysFromToday(value: string, now = new Date()) {
+  if (!isValidDateInput(value)) {
+    return null;
+  }
+
+  const targetDate = new Date(`${value}T00:00:00Z`);
+  const today = startOfUtcDay(now);
+  return Math.floor(
+    (targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+  );
+}
+
+export function getAutomaticPaymentStatus(
+  nextDueDate: string,
+  currentStatus: string,
+  now = new Date(),
+) {
+  const daysUntilDue = diffInDaysFromToday(nextDueDate, now);
+  if (daysUntilDue === null) {
+    return currentStatus || "Not Paid";
+  }
+
+  if (daysUntilDue <= 0) {
+    return "Not Paid";
+  }
+
+  if (daysUntilDue <= 7) {
+    return "Pending";
+  }
+
+  return "Paid";
+}

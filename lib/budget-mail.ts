@@ -205,30 +205,37 @@ function buildRows(
 ) {
   if (items.length === 0) {
     return `
-      <tr>
-        <td colspan="4" style="padding:16px;border-bottom:1px solid #e6e8ee;color:#637083;">
-          ${escapeHtml(emptyLabel)}
-        </td>
-      </tr>`;
+      <div style="border:1px solid #e6e8ee;border-radius:14px;background:#ffffff;padding:16px;color:#637083;">
+        ${escapeHtml(emptyLabel)}
+      </div>`;
   }
 
   return items
     .map(
       (item) => `
-        <tr>
-          <td style="padding:14px 16px;border-bottom:1px solid #e6e8ee;color:#0f172a;font-weight:600;">
-            ${escapeHtml(item.tool)}
-          </td>
-          <td style="padding:14px 16px;border-bottom:1px solid #e6e8ee;color:#475569;">
-            ${escapeHtml(item.subscription || "-")}
-          </td>
-          <td style="padding:14px 16px;border-bottom:1px solid #e6e8ee;color:#475569;">
-            ${escapeHtml(formatDueDate(item.dueDate))}
-          </td>
-          <td style="padding:14px 16px;border-bottom:1px solid #e6e8ee;color:#0f172a;font-weight:600;text-align:right;">
-            ${escapeHtml(item.price || formatCurrency(item.amount))}
-          </td>
-        </tr>`,
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:0;border:1px solid #e6e8ee;border-radius:14px;background:#ffffff;margin-bottom:12px;">
+          <tr>
+            <td style="padding:16px 16px 8px;font-size:18px;line-height:24px;color:#111827;font-weight:700;">
+              ${escapeHtml(item.tool)}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 16px 16px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                <tr>
+                  <td style="padding:0 0 10px;font-size:12px;line-height:18px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Plan</td>
+                  <td style="padding:0 0 10px;font-size:12px;line-height:18px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Due Date</td>
+                  <td align="right" style="padding:0 0 10px;font-size:12px;line-height:18px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Price</td>
+                </tr>
+                <tr>
+                  <td style="padding:0;font-size:15px;line-height:22px;color:#475569;">${escapeHtml(item.subscription || "-")}</td>
+                  <td style="padding:0;font-size:15px;line-height:22px;color:#475569;">${escapeHtml(formatDueDate(item.dueDate))}</td>
+                  <td align="right" style="padding:0;font-size:15px;line-height:22px;color:#111827;font-weight:700;">${escapeHtml(item.price || formatCurrency(item.amount))}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>`,
     )
     .join("");
 }
@@ -252,69 +259,71 @@ function buildBudgetEmail(subscriptions: Subscription[], referenceDate: Date) {
     subject: `SubTrack Pro - ${report.previousMonth.label} recap and ${report.currentMonth.label} budget`,
     html: `
       <div style="margin:0;padding:24px;background:#eef2ff;font-family:Inter,Arial,sans-serif;color:#111827;">
-        <div style="max-width:860px;margin:0 auto;background:#ffffff;border:1px solid #dbe4ff;border-radius:20px;overflow:hidden;box-shadow:0 25px 60px rgba(79,70,229,0.12);">
-          <div style="background:#6366f1;padding:28px 32px;color:#ffffff;">
+        <style>
+          @media only screen and (max-width: 600px) {
+            .budget-shell { padding: 0 !important; }
+            .budget-card { width: 100% !important; border-radius: 12px !important; }
+            .budget-hero { padding: 24px 18px !important; }
+            .budget-section { padding: 18px !important; }
+            .budget-stack, .budget-stack tbody, .budget-stack tr, .budget-stack td { display: block !important; width: 100% !important; }
+            .budget-stack td { padding: 0 0 12px !important; }
+            .budget-kpi { margin-bottom: 12px !important; }
+            .budget-copy { font-size: 14px !important; line-height: 22px !important; }
+          }
+        </style>
+        <div class="budget-shell" style="max-width:860px;margin:0 auto;">
+        <div class="budget-card" style="max-width:860px;margin:0 auto;background:#ffffff;border:1px solid #dbe4ff;border-radius:20px;overflow:hidden;box-shadow:0 25px 60px rgba(79,70,229,0.12);">
+          <div class="budget-hero" style="background:#6366f1;padding:28px 32px;color:#ffffff;">
             <div style="font-size:12px;letter-spacing:0.14em;text-transform:uppercase;opacity:0.85;">SubTrack Pro Budget</div>
             <h1 style="margin:10px 0 0;font-size:30px;line-height:1.2;">Monthly spend recap and forecast</h1>
-            <p style="margin:12px 0 0;font-size:15px;line-height:1.6;color:#e0e7ff;">
+            <p class="budget-copy" style="margin:12px 0 0;font-size:15px;line-height:1.6;color:#e0e7ff;">
               ${escapeHtml(report.previousMonth.label)} closed at <strong>${escapeHtml(formatCurrency(report.previousMonth.total))}</strong>.
               ${escapeHtml(report.currentMonth.label)} is currently forecast at <strong>${escapeHtml(formatCurrency(report.currentMonth.total))}</strong>.
             </p>
           </div>
 
-          <div style="padding:28px 32px 12px;">
-            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;">
-              <div style="border:1px solid #e5e7eb;border-radius:16px;padding:18px;">
+          <div class="budget-section" style="padding:28px 32px 12px;">
+            <table class="budget-stack" role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:0 14px;">
+              <tr>
+                <td class="budget-kpi" style="padding-right:14px;">
+                  <div style="border:1px solid #e5e7eb;border-radius:16px;padding:18px;">
                 <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;">Last month</div>
                 <div style="margin-top:8px;font-size:28px;font-weight:800;color:#111827;">${escapeHtml(formatCurrency(report.previousMonth.total))}</div>
                 <div style="margin-top:6px;font-size:13px;color:#6b7280;">${escapeHtml(report.previousMonth.label)}</div>
-              </div>
-              <div style="border:1px solid #e5e7eb;border-radius:16px;padding:18px;">
+                  </div>
+                </td>
+                <td class="budget-kpi" style="padding-right:14px;">
+                  <div style="border:1px solid #e5e7eb;border-radius:16px;padding:18px;">
                 <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;">New month</div>
                 <div style="margin-top:8px;font-size:28px;font-weight:800;color:#111827;">${escapeHtml(formatCurrency(report.currentMonth.total))}</div>
                 <div style="margin-top:6px;font-size:13px;color:#6b7280;">${escapeHtml(report.currentMonth.label)}</div>
-              </div>
-              <div style="border:1px solid #e5e7eb;border-radius:16px;padding:18px;">
+                  </div>
+                </td>
+                <td class="budget-kpi">
+                  <div style="border:1px solid #e5e7eb;border-radius:16px;padding:18px;">
                 <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;">MoM change</div>
                 <div style="margin-top:8px;font-size:28px;font-weight:800;color:${
                   report.changeAmount > 0 ? "#b91c1c" : report.changeAmount < 0 ? "#047857" : "#111827"
                 };">${escapeHtml(formatCurrency(report.changeAmount))}</div>
                 <div style="margin-top:6px;font-size:13px;color:#6b7280;">${escapeHtml(changeLabel)}</div>
-              </div>
-            </div>
+                  </div>
+                </td>
+              </tr>
+            </table>
           </div>
 
-          <div style="padding:8px 32px 32px;">
+          <div class="budget-section" style="padding:8px 32px 32px;">
             <h2 style="margin:0 0 12px;font-size:20px;color:#111827;">What was spent in ${escapeHtml(report.previousMonth.label)}</h2>
-            <table style="width:100%;border-collapse:collapse;border:1px solid #e6e8ee;border-radius:14px;overflow:hidden;background:#ffffff;">
-              <thead>
-                <tr style="background:#f8fafc;text-align:left;">
-                  <th style="padding:12px 16px;color:#64748b;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Tool</th>
-                  <th style="padding:12px 16px;color:#64748b;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Plan</th>
-                  <th style="padding:12px 16px;color:#64748b;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Due Date</th>
-                  <th style="padding:12px 16px;color:#64748b;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;text-align:right;">Price</th>
-                </tr>
-              </thead>
-              <tbody>${previousMonthItems}</tbody>
-            </table>
+            ${previousMonthItems}
 
             <h2 style="margin:28px 0 12px;font-size:20px;color:#111827;">What is scheduled for ${escapeHtml(report.currentMonth.label)}</h2>
-            <table style="width:100%;border-collapse:collapse;border:1px solid #e6e8ee;border-radius:14px;overflow:hidden;background:#ffffff;">
-              <thead>
-                <tr style="background:#f8fafc;text-align:left;">
-                  <th style="padding:12px 16px;color:#64748b;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Tool</th>
-                  <th style="padding:12px 16px;color:#64748b;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Plan</th>
-                  <th style="padding:12px 16px;color:#64748b;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Due Date</th>
-                  <th style="padding:12px 16px;color:#64748b;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;text-align:right;">Price</th>
-                </tr>
-              </thead>
-              <tbody>${currentMonthItems}</tbody>
-            </table>
+            ${currentMonthItems}
 
-            <p style="margin:20px 0 0;font-size:13px;line-height:1.6;color:#6b7280;">
+            <p class="budget-copy" style="margin:20px 0 0;font-size:13px;line-height:1.6;color:#6b7280;">
               Log in to SubTrack Pro to adjust budgets, update payment status, or review subscription changes before the month closes.
             </p>
           </div>
+        </div>
         </div>
       </div>`,
     report,
