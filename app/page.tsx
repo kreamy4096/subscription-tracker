@@ -184,13 +184,117 @@ function formatDueGroupLabel(date: Date) {
   });
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+function normalizePdfText(value: string) {
+  return value.replace(/[^\x20-\x7E]/g, "?");
+}
+
+function escapePdfText(value: string) {
+  return normalizePdfText(value)
+    .replaceAll("\\", "\\\\")
+    .replaceAll("(", "\\(")
+    .replaceAll(")", "\\)");
+}
+
+function truncatePdfCell(value: string, length: number) {
+  const normalized = normalizePdfText(value);
+  if (normalized.length <= length) {
+    return normalized.padEnd(length, " ");
+  }
+
+  return `${normalized.slice(0, Math.max(0, length - 3))}...`;
+}
+
+function buildPdfDocument(
+  lines: Array<{ text: string; size?: number; font?: "regular" | "bold" | "mono" }>,
+) {
+  const pageWidth = 612;
+  const pageHeight = 792;
+  const topMargin = 54;
+  const bottomMargin = 54;
+  const leftMargin = 48;
+  const defaultSize = 11;
+  const encoder = new TextEncoder();
+  const pages: string[] = [];
+  let currentY = pageHeight - topMargin;
+  let currentCommands: string[] = [];
+
+  const pushPage = () => {
+    if (currentCommands.length > 0) {
+      pages.push(currentCommands.join("\n"));
+      currentCommands = [];
+    }
+    currentY = pageHeight - topMargin;
+  };
+
+  for (const line of lines) {
+    const size = line.size ?? defaultSize;
+    const lineHeight = size + 6;
+
+    if (currentY - lineHeight < bottomMargin) {
+      pushPage();
+    }
+
+    const font =
+      line.font === "bold" ? "F2" : line.font === "mono" ? "F3" : "F1";
+    currentCommands.push(
+      `BT /${font} ${size} Tf 1 0 0 1 ${leftMargin} ${currentY} Tm (${escapePdfText(
+        line.text,
+      )}) Tj ET`,
+    );
+    currentY -= lineHeight;
+  }
+
+  pushPage();
+
+  const objects: string[] = [];
+  objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
+  objects[2] = "";
+  objects[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
+  objects[4] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>";
+  objects[5] = "<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>";
+
+  const pageRefs: string[] = [];
+  let objectNumber = 6;
+
+  for (const content of pages) {
+    const contentRef = objectNumber;
+    const pageRef = objectNumber + 1;
+    const contentBytes = encoder.encode(content);
+
+    objects[contentRef] =
+      `<< /Length ${contentBytes.length} >>\nstream\n${content}\nendstream`;
+    objects[pageRef] =
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents ${contentRef} 0 R >>`;
+    pageRefs.push(`${pageRef} 0 R`);
+    objectNumber += 2;
+  }
+
+  objects[2] = `<< /Type /Pages /Kids [${pageRefs.join(" ")}] /Count ${pageRefs.length} >>`;
+
+  let pdf = "%PDF-1.4\n";
+  const offsets: number[] = [0];
+
+  for (let index = 1; index < objects.length; index += 1) {
+    const objectBody = objects[index];
+    if (!objectBody) {
+      continue;
+    }
+
+    offsets[index] = encoder.encode(pdf).length;
+    pdf += `${index} 0 obj\n${objectBody}\nendobj\n`;
+  }
+
+  const xrefOffset = encoder.encode(pdf).length;
+  pdf += `xref\n0 ${objects.length}\n`;
+  pdf += "0000000000 65535 f \n";
+
+  for (let index = 1; index < objects.length; index += 1) {
+    const offset = offsets[index] ?? 0;
+    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  }
+
+  pdf += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return new Blob([encoder.encode(pdf)], { type: "application/pdf" });
 }
 
 export default function Home() {
@@ -691,81 +795,72 @@ export default function Home() {
   };
 
   const handleDownloadNextDue = () => {
-    const sections = nextDueGroups
-      .map((group) => {
-        const rows = group.items
-          .map(
-            ({ subscription }) => `
-              <tr>
-                <td style="padding:14px 16px;border-bottom:1px solid #e5e7eb;">${escapeHtml(subscription.tool || "-")}</td>
-                <td style="padding:14px 16px;border-bottom:1px solid #e5e7eb;">${escapeHtml(subscription.subscription || "-")}</td>
-                <td style="padding:14px 16px;border-bottom:1px solid #e5e7eb;">${escapeHtml(formatDueDate(subscription.next_due_date || subscription.due_date))}</td>
-                <td style="padding:14px 16px;border-bottom:1px solid #e5e7eb;">${escapeHtml(subscription.price || "-")}</td>
-                <td style="padding:14px 16px;border-bottom:1px solid #e5e7eb;">${escapeHtml(subscription.payment_status || "Not Paid")}</td>
-              </tr>`,
-          )
-          .join("");
+    const generatedOn = new Date().toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+    const lines: Array<{
+      text: string;
+      size?: number;
+      font?: "regular" | "bold" | "mono";
+    }> = [
+      { text: "SubTrack Pro", size: 12, font: "bold" },
+      { text: "Next Due Subscriptions", size: 20, font: "bold" },
+      {
+        text: `Generated on ${generatedOn}. Includes only unpaid subscriptions due from today onward.`,
+        size: 11,
+      },
+      { text: "", size: 8 },
+    ];
 
-        return `
-          <section style="margin-top:24px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px;">
-              <h2 style="margin:0;font-size:18px;line-height:1.3;color:#111827;">${escapeHtml(group.label)}</h2>
-              <span style="display:inline-flex;align-items:center;border-radius:999px;background:#eef2ff;color:#4338ca;padding:6px 12px;font-size:12px;font-weight:600;">
-                ${group.items.length} due
-              </span>
-            </div>
-            <table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;background:#ffffff;">
-              <thead>
-                <tr style="background:#f8fafc;text-align:left;">
-                  <th style="padding:12px 16px;color:#64748b;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Tool</th>
-                  <th style="padding:12px 16px;color:#64748b;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Plan</th>
-                  <th style="padding:12px 16px;color:#64748b;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Due Date</th>
-                  <th style="padding:12px 16px;color:#64748b;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Price</th>
-                  <th style="padding:12px 16px;color:#64748b;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">Status</th>
-                </tr>
-              </thead>
-              <tbody>${rows}</tbody>
-            </table>
-          </section>`;
-      })
-      .join("");
-    const html = `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SubTrack Pro Next Due Report</title>
-  </head>
-  <body style="margin:0;padding:24px;background:#eef2ff;font-family:Inter,Arial,sans-serif;color:#111827;">
-    <div style="max-width:960px;margin:0 auto;background:#ffffff;border:1px solid #dbe4ff;border-radius:20px;overflow:hidden;box-shadow:0 25px 60px rgba(79,70,229,0.12);">
-      <div style="background:#6366f1;padding:28px 32px;color:#ffffff;">
-        <div style="font-size:12px;letter-spacing:0.14em;text-transform:uppercase;opacity:0.85;">SubTrack Pro</div>
-        <h1 style="margin:10px 0 0;font-size:30px;line-height:1.2;">Next Due Subscriptions</h1>
-        <p style="margin:12px 0 0;font-size:15px;line-height:1.6;color:#e0e7ff;">
-          Generated on ${escapeHtml(new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }))} for management review. This report only includes unpaid subscriptions due from today onward.
-        </p>
-      </div>
-      <div style="padding:28px 32px;">
-        ${
-          sections ||
-          `<div style="padding:16px;border:1px solid #e5e7eb;border-radius:14px;color:#64748b;">No due subscriptions available right now.</div>`
+    if (nextDueGroups.length === 0) {
+      lines.push({
+        text: "No due subscriptions available right now.",
+        size: 12,
+      });
+    } else {
+      for (const group of nextDueGroups) {
+        lines.push({
+          text: `${group.label} (${group.items.length} due)`,
+          size: 14,
+          font: "bold",
+        });
+        lines.push({
+          text: `${truncatePdfCell("Tool", 20)} ${truncatePdfCell("Plan", 18)} ${truncatePdfCell("Due Date", 14)} ${truncatePdfCell("Price", 10)} ${truncatePdfCell("Status", 10)}`,
+          size: 10,
+          font: "mono",
+        });
+        lines.push({
+          text: `${"-".repeat(20)} ${"-".repeat(18)} ${"-".repeat(14)} ${"-".repeat(10)} ${"-".repeat(10)}`,
+          size: 10,
+          font: "mono",
+        });
+
+        for (const { subscription } of group.items) {
+          lines.push({
+            text: `${truncatePdfCell(subscription.tool || "-", 20)} ${truncatePdfCell(subscription.subscription || "-", 18)} ${truncatePdfCell(formatDueDate(subscription.next_due_date || subscription.due_date), 14)} ${truncatePdfCell(subscription.price || "-", 10)} ${truncatePdfCell(subscription.payment_status || "Not Paid", 10)}`,
+            size: 10,
+            font: "mono",
+          });
         }
-      </div>
-    </div>
-  </body>
-</html>`;
-    const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
+
+        lines.push({ text: "", size: 8 });
+      }
+    }
+
+    const blob = buildPdfDocument(lines);
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `subtrack-next-due-${new Date().toISOString().slice(0, 10)}.html`;
+    link.download = `subtrack-next-due-${new Date().toISOString().slice(0, 10)}.pdf`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     showToast({
       title: "Next due list downloaded",
-      description: "The due subscriptions report is ready to share.",
+      description: "The due subscriptions PDF is ready to share.",
       tone: "success",
     });
   };

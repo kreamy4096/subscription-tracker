@@ -83,6 +83,14 @@ function formatDueDate(value: string) {
   });
 }
 
+function isChargeableSubscription(subscription: Subscription) {
+  const amount = Number.parseFloat(
+    (subscription.price ?? "").replace(/[^0-9.]/g, ""),
+  );
+
+  return subscription.action !== "FREE" && Number.isFinite(amount) && amount > 0;
+}
+
 async function getZohoAccessToken() {
   const response = await fetch("https://accounts.zoho.com/oauth/v2/token", {
     method: "POST",
@@ -370,9 +378,10 @@ export async function sendMonthlyBudgetReport(referenceDate = new Date()) {
     getAllSubscriptions(),
     getBudgetRecipients(),
   ]);
+  const chargeableSubscriptions = subscriptions.filter(isChargeableSubscription);
 
   if (groups.length === 0) {
-    const report = getBudgetReport(subscriptions, referenceDate);
+    const report = getBudgetReport(chargeableSubscriptions, referenceDate);
     return {
       sent: 0,
       emailsSent: 0,
@@ -381,7 +390,10 @@ export async function sendMonthlyBudgetReport(referenceDate = new Date()) {
     };
   }
 
-  const { subject, html, report } = buildBudgetEmail(subscriptions, referenceDate);
+  const { subject, html, report } = buildBudgetEmail(
+    chargeableSubscriptions,
+    referenceDate,
+  );
 
   for (const group of groups) {
     const orderedEmails = group.recipients
