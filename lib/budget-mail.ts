@@ -266,8 +266,9 @@ function buildBudgetEmail(subscriptions: Subscription[], referenceDate: Date) {
             .budget-hero { padding: 24px 18px !important; }
             .budget-section { padding: 18px !important; }
             .budget-stack, .budget-stack tbody, .budget-stack tr, .budget-stack td { display: block !important; width: 100% !important; }
-            .budget-stack td { padding: 0 0 12px !important; }
-            .budget-kpi { margin-bottom: 12px !important; }
+            .budget-kpi { padding: 0 0 14px !important; box-sizing: border-box !important; }
+            .budget-kpi-last { padding-bottom: 0 !important; }
+            .budget-kpi-card { margin: 0 !important; }
             .budget-copy { font-size: 14px !important; line-height: 22px !important; }
           }
         </style>
@@ -283,29 +284,29 @@ function buildBudgetEmail(subscriptions: Subscription[], referenceDate: Date) {
           </div>
 
           <div class="budget-section" style="padding:28px 32px 12px;">
-            <table class="budget-stack" role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:separate;border-spacing:0 14px;">
+            <table class="budget-stack" role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
               <tr>
-                <td class="budget-kpi" style="padding-right:14px;">
-                  <div style="border:1px solid #e5e7eb;border-radius:16px;padding:18px;">
-                <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;">Last month</div>
-                <div style="margin-top:8px;font-size:28px;font-weight:800;color:#111827;">${escapeHtml(formatCurrency(report.previousMonth.total))}</div>
-                <div style="margin-top:6px;font-size:13px;color:#6b7280;">${escapeHtml(report.previousMonth.label)}</div>
+                <td class="budget-kpi" width="33.333%" valign="top" style="width:33.333%;padding:0 8px 16px 0;">
+                  <div class="budget-kpi-card" style="border:1px solid #e5e7eb;border-radius:16px;padding:18px;">
+                    <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;">Last month</div>
+                    <div style="margin-top:8px;font-size:28px;font-weight:800;color:#111827;">${escapeHtml(formatCurrency(report.previousMonth.total))}</div>
+                    <div style="margin-top:6px;font-size:13px;color:#6b7280;">${escapeHtml(report.previousMonth.label)}</div>
                   </div>
                 </td>
-                <td class="budget-kpi" style="padding-right:14px;">
-                  <div style="border:1px solid #e5e7eb;border-radius:16px;padding:18px;">
-                <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;">New month</div>
-                <div style="margin-top:8px;font-size:28px;font-weight:800;color:#111827;">${escapeHtml(formatCurrency(report.currentMonth.total))}</div>
-                <div style="margin-top:6px;font-size:13px;color:#6b7280;">${escapeHtml(report.currentMonth.label)}</div>
+                <td class="budget-kpi" width="33.333%" valign="top" style="width:33.333%;padding:0 8px 16px;">
+                  <div class="budget-kpi-card" style="border:1px solid #e5e7eb;border-radius:16px;padding:18px;">
+                    <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;">New month</div>
+                    <div style="margin-top:8px;font-size:28px;font-weight:800;color:#111827;">${escapeHtml(formatCurrency(report.currentMonth.total))}</div>
+                    <div style="margin-top:6px;font-size:13px;color:#6b7280;">${escapeHtml(report.currentMonth.label)}</div>
                   </div>
                 </td>
-                <td class="budget-kpi">
-                  <div style="border:1px solid #e5e7eb;border-radius:16px;padding:18px;">
-                <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;">MoM change</div>
-                <div style="margin-top:8px;font-size:28px;font-weight:800;color:${
-                  report.changeAmount > 0 ? "#b91c1c" : report.changeAmount < 0 ? "#047857" : "#111827"
-                };">${escapeHtml(formatCurrency(report.changeAmount))}</div>
-                <div style="margin-top:6px;font-size:13px;color:#6b7280;">${escapeHtml(changeLabel)}</div>
+                <td class="budget-kpi budget-kpi-last" width="33.333%" valign="top" style="width:33.333%;padding:0 0 16px 8px;">
+                  <div class="budget-kpi-card" style="border:1px solid #e5e7eb;border-radius:16px;padding:18px;">
+                    <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;">MoM change</div>
+                    <div style="margin-top:8px;font-size:28px;font-weight:800;color:${
+                      report.changeAmount > 0 ? "#b91c1c" : report.changeAmount < 0 ? "#047857" : "#111827"
+                    };">${escapeHtml(formatCurrency(report.changeAmount))}</div>
+                    <div style="margin-top:6px;font-size:13px;color:#6b7280;">${escapeHtml(changeLabel)}</div>
                   </div>
                 </td>
               </tr>
