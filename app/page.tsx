@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import BudgetMailSettingsModal from "@/components/BudgetMailSettingsModal";
 import ReminderSettingsModal from "@/components/ReminderSettingsModal";
 import SubscriptionModal from "@/components/SubscriptionModal";
 import ToastViewport, { type ToastMessage } from "@/components/ToastViewport";
@@ -16,7 +17,10 @@ import {
   formatCurrency,
   getBudgetReport,
 } from "@/lib/budget";
-import type { Subscription } from "@/lib/subscription-types";
+import {
+  normalizeSubscriptionPlan,
+  type Subscription,
+} from "@/lib/subscription-types";
 
 const navItems = [
   { icon: "dashboard", label: "Overview" },
@@ -30,7 +34,7 @@ const seedSubscriptions: Subscription[] = [
   {
     id: "seed-1",
     tool: "Figma",
-    subscription: "Organization",
+    subscription: "Paid",
     due_date: "May 24, 2026",
     price: "$45",
     login_email: "design@subtrack.co",
@@ -41,7 +45,7 @@ const seedSubscriptions: Subscription[] = [
   {
     id: "seed-2",
     tool: "Notion",
-    subscription: "Business",
+    subscription: "Paid",
     due_date: "May 26, 2026",
     price: "$18",
     login_email: "ops@subtrack.co",
@@ -52,7 +56,7 @@ const seedSubscriptions: Subscription[] = [
   {
     id: "seed-3",
     tool: "Slack",
-    subscription: "Pro",
+    subscription: "Paid",
     due_date: "Jun 2, 2026",
     price: "$12",
     login_email: "team@subtrack.co",
@@ -78,7 +82,7 @@ function normalizeSubscription(
   return {
     id: item.id,
     tool: item.tool ?? "",
-    subscription: item.subscription ?? "",
+    subscription: normalizeSubscriptionPlan(item.subscription, item.action),
     due_date: item.due_date ?? "",
     billing_type: item.billing_type ?? "one_time",
     recurrence_day: item.recurrence_day ?? null,
@@ -306,6 +310,7 @@ export default function Home() {
   const [paymentFilter, setPaymentFilter] = useState("All");
   const [actionFilter, setActionFilter] = useState("All");
   const [isReminderSettingsOpen, setIsReminderSettingsOpen] = useState(false);
+  const [isBudgetMailSettingsOpen, setIsBudgetMailSettingsOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"add" | "edit">("add");
   const [selectedSubscription, setSelectedSubscription] =
@@ -459,6 +464,9 @@ export default function Home() {
   ).length;
   const startOfToday = getStartOfToday();
   const upcomingDueEntries = subscriptions
+    .filter(
+      (item) => item.action !== "FREE" && item.subscription !== "Free",
+    )
     .map((item) => {
       const dueDate = parseDueDate(item.next_due_date || item.due_date);
 
@@ -776,11 +784,22 @@ export default function Home() {
         return;
       }
 
-      showToast({
-        title: "Budget report sent",
-        description: `Delivered ${data.emailsSent ?? 0} monthly budget email${data.emailsSent === 1 ? "" : "s"}.`,
-        tone: "success",
-      });
+      if ((data.emailsSent ?? 0) === 0) {
+        showToast({
+          title: "Budget report not sent",
+          description:
+            data.skipped === "disabled"
+              ? "Monthly budget email is disabled in Mail Settings."
+              : "Add an active recipient in Mail Settings first.",
+          tone: "info",
+        });
+      } else {
+        showToast({
+          title: "Budget report sent",
+          description: "Delivered the monthly budget email with its PDF attachment.",
+          tone: "success",
+        });
+      }
     } catch (budgetError) {
       console.error("Failed to send budget report:", budgetError);
       setError("A network error occurred while sending the budget report.");
@@ -1363,17 +1382,29 @@ export default function Home() {
                 <h3 className="mt-1 text-title-lg font-semibold text-on-surface">
                   First day of every month
                 </h3>
-                <button
-                  type="button"
-                  onClick={() => void handleSendBudgetEmail()}
-                  disabled={isBudgetSending}
-                  className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary ui-button-pad-lg text-label-md font-semibold text-on-primary transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <span className="material-symbols-outlined text-[18px]">
-                    {isBudgetSending ? "hourglass_top" : "send"}
-                  </span>
-                  {isBudgetSending ? "Sending..." : "Send Report Now"}
-                </button>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleSendBudgetEmail()}
+                    disabled={isBudgetSending}
+                    className="inline-flex items-center gap-2 rounded-lg bg-primary ui-button-pad-lg text-label-md font-semibold text-on-primary transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">
+                      {isBudgetSending ? "hourglass_top" : "send"}
+                    </span>
+                    {isBudgetSending ? "Sending..." : "Send Report Now"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsBudgetMailSettingsOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-lg border border-outline-variant ui-button-pad-lg text-label-md font-semibold text-secondary transition-colors hover:bg-surface-container-low"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">
+                      settings
+                    </span>
+                    Mail Settings
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1698,24 +1729,30 @@ export default function Home() {
                         </span>
                       </td>
                       <td className="ui-table-cell">
-                        <select
-                          value={item.payment_status || "Not Paid"}
-                          disabled={statusSavingId === item.id}
-                          onChange={(event) =>
-                            void handleStatusChange(item, event.target.value)
-                          }
-                          className={`rounded-full border ui-badge-pad text-label-sm font-semibold outline-none transition-colors ${getStatusBadgeClasses(
-                            item.payment_status || "Not Paid",
-                          )} ${
-                            statusSavingId === item.id
-                              ? "cursor-wait opacity-70"
-                              : "cursor-pointer"
-                          }`}
-                        >
-                          <option value="Paid">Paid</option>
-                          <option value="Pending">Pending</option>
-                          <option value="Not Paid">Not Paid</option>
-                        </select>
+                        {item.action === "FREE" || item.subscription === "Free" ? (
+                          <span className="inline-flex rounded-full bg-primary-fixed ui-badge-pad text-label-sm font-semibold text-primary">
+                            Free
+                          </span>
+                        ) : (
+                          <select
+                            value={item.payment_status || "Not Paid"}
+                            disabled={statusSavingId === item.id}
+                            onChange={(event) =>
+                              void handleStatusChange(item, event.target.value)
+                            }
+                            className={`rounded-full border ui-badge-pad text-label-sm font-semibold outline-none transition-colors ${getStatusBadgeClasses(
+                              item.payment_status || "Not Paid",
+                            )} ${
+                              statusSavingId === item.id
+                                ? "cursor-wait opacity-70"
+                                : "cursor-pointer"
+                            }`}
+                          >
+                            <option value="Paid">Paid</option>
+                            <option value="Pending">Pending</option>
+                            <option value="Not Paid">Not Paid</option>
+                          </select>
+                        )}
                       </td>
                       <td className="ui-table-cell text-right">
                         <div className="flex items-center justify-end gap-1 whitespace-nowrap">
@@ -1766,6 +1803,11 @@ export default function Home() {
       <ReminderSettingsModal
         isOpen={isReminderSettingsOpen}
         onClose={() => setIsReminderSettingsOpen(false)}
+        onNotify={showToast}
+      />
+      <BudgetMailSettingsModal
+        isOpen={isBudgetMailSettingsOpen}
+        onClose={() => setIsBudgetMailSettingsOpen(false)}
         onNotify={showToast}
       />
       {isLogoutConfirmOpen ? (

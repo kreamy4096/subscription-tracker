@@ -1,6 +1,9 @@
 import { decrypt as decryptLegacyPassword } from "@/lib/crypto";
 import { decryptCredential } from "@/lib/credentials";
-import type { Subscription } from "@/lib/subscription-types";
+import {
+  normalizeSubscriptionPlan,
+  type Subscription,
+} from "@/lib/subscription-types";
 
 type SubscriptionRow = Omit<Partial<Subscription>, "next_due_date"> & {
   id: string;
@@ -19,7 +22,7 @@ export function serializeSubscriptionRow(row: SubscriptionRow): Subscription {
   return {
     id: row.id,
     tool: row.tool ?? "",
-    subscription: row.subscription ?? "",
+    subscription: normalizeSubscriptionPlan(row.subscription, row.action),
     due_date: row.due_date ?? "",
     billing_type: row.billing_type ?? "one_time",
     recurrence_day: row.recurrence_day ?? null,

@@ -21,7 +21,9 @@ export async function GET(request: Request) {
   try {
     const statusSyncResult = await query(
       `SELECT id, next_due_date, due_date, payment_status
-       FROM subscriptions`,
+       FROM subscriptions
+       WHERE COALESCE(action, '') != 'FREE'
+         AND COALESCE(subscription, '') != 'Free'`,
     );
 
     await Promise.all(

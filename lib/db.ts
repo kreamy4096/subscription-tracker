@@ -297,6 +297,86 @@ export async function initDb() {
       ON CONFLICT (group_id, email_normalized) DO NOTHING;
     `);
 
+    await activePool.query(`
+      CREATE TABLE IF NOT EXISTS budget_mail_settings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        enabled BOOLEAN DEFAULT true,
+        updated_at TIMESTAMPTZ DEFAULT now()
+      );
+    `);
+
+    await activePool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS budget_mail_settings_singleton
+      ON budget_mail_settings ((true));
+    `);
+
+    await activePool.query(`
+      INSERT INTO budget_mail_settings (enabled)
+      SELECT true
+      WHERE NOT EXISTS (SELECT 1 FROM budget_mail_settings)
+      ON CONFLICT DO NOTHING;
+    `);
+
+    await activePool.query(`
+      CREATE TABLE IF NOT EXISTS budget_mail_recipients (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        settings_id UUID NOT NULL REFERENCES budget_mail_settings(id) ON DELETE CASCADE,
+        email TEXT NOT NULL,
+        email_normalized TEXT GENERATED ALWAYS AS (lower(email)) STORED,
+        is_primary BOOLEAN DEFAULT false,
+        is_active BOOLEAN DEFAULT true,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT now(),
+        updated_at TIMESTAMPTZ DEFAULT now()
+      );
+    `);
+
+    await activePool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS budget_mail_recipients_email_key
+      ON budget_mail_recipients (settings_id, email_normalized);
+    `);
+
+    await activePool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS budget_mail_recipients_one_primary
+      ON budget_mail_recipients (settings_id)
+      WHERE is_primary = true;
+    `);
+
+    await activePool.query(`
+      WITH distinct_recipients AS (
+        SELECT DISTINCT ON (email_normalized)
+          email,
+          email_normalized,
+          sort_order,
+          created_at
+        FROM reminder_recipients
+        WHERE is_active = true
+        ORDER BY email_normalized, sort_order ASC, created_at ASC
+      ),
+      ranked_recipients AS (
+        SELECT
+          email,
+          row_number() OVER (ORDER BY sort_order ASC, created_at ASC, email ASC) AS position
+        FROM distinct_recipients
+      )
+      INSERT INTO budget_mail_recipients (
+        settings_id,
+        email,
+        is_primary,
+        is_active,
+        sort_order
+      )
+      SELECT
+        (SELECT id FROM budget_mail_settings ORDER BY updated_at ASC LIMIT 1),
+        email,
+        position = 1,
+        true,
+        position::integer - 1
+      FROM ranked_recipients
+      WHERE NOT EXISTS (SELECT 1 FROM budget_mail_recipients)
+      ON CONFLICT (settings_id, email_normalized) DO NOTHING;
+    `);
+
     dbInitialized = true;
     console.log("Neon database tables verified/created successfully.");
   } catch (error) {

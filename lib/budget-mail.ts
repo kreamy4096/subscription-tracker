@@ -1,20 +1,20 @@
 import "server-only";
 
 import { buildMonthSummary, formatCurrency, getBudgetReport } from "@/lib/budget";
+import { buildBudgetReportPdf, getBudgetPdfFileName } from "@/lib/budget-pdf";
 import { query } from "@/lib/db";
-import type { Subscription } from "@/lib/subscription-types";
+import {
+  normalizeSubscriptionPlan,
+  type Subscription,
+} from "@/lib/subscription-types";
 
-interface ReminderGroupRow {
-  id: string;
-  name: string;
+interface BudgetMailSettingsRow {
   enabled: boolean;
 }
 
-interface ReminderRecipientRow {
-  group_id: string;
+interface BudgetRecipientRow {
   email: string;
   is_primary: boolean;
-  is_active: boolean;
   sort_order: number;
 }
 
@@ -41,6 +41,19 @@ interface ZohoErrorResponse {
   data?: {
     moreInfo?: string;
   };
+  status?: {
+    description?: string;
+  };
+}
+
+interface ZohoAttachment {
+  storeName?: string;
+  attachmentName?: string;
+  attachmentPath?: string;
+}
+
+interface ZohoAttachmentResponse {
+  data?: ZohoAttachment | ZohoAttachment[] | { moreInfo?: string };
   status?: {
     description?: string;
   };
@@ -88,7 +101,12 @@ function isChargeableSubscription(subscription: Subscription) {
     (subscription.price ?? "").replace(/[^0-9.]/g, ""),
   );
 
-  return subscription.action !== "FREE" && Number.isFinite(amount) && amount > 0;
+  return (
+    subscription.action !== "FREE" &&
+    subscription.subscription !== "Free" &&
+    Number.isFinite(amount) &&
+    amount > 0
+  );
 }
 
 async function getZohoAccessToken() {
@@ -178,33 +196,39 @@ async function getAllSubscriptions() {
      ORDER BY created_at DESC`,
   );
 
-  return result.rows as Subscription[];
+  return result.rows.map((row) => ({
+    ...row,
+    subscription: normalizeSubscriptionPlan(row.subscription, row.action),
+  })) as Subscription[];
 }
 
-async function getBudgetRecipients() {
-  const groupsResult = await query(
-    `SELECT id, name, enabled
-     FROM reminder_groups
-     ORDER BY created_at ASC, name ASC`,
+async function getBudgetMailDelivery() {
+  const settingsResult = await query(
+    `SELECT id, enabled
+     FROM budget_mail_settings
+     ORDER BY updated_at ASC
+     LIMIT 1`,
   );
+  const settings = settingsResult.rows[0] as
+    | (BudgetMailSettingsRow & { id: string })
+    | undefined;
+
+  if (!settings) {
+    return { enabled: false, recipients: [] as BudgetRecipientRow[] };
+  }
+
   const recipientsResult = await query(
-    `SELECT group_id, email, is_primary, is_active, sort_order
-     FROM reminder_recipients
-     WHERE is_active = true
+    `SELECT email, is_primary, sort_order
+     FROM budget_mail_recipients
+     WHERE settings_id = $1 AND is_active = true
      ORDER BY sort_order ASC, created_at ASC, email ASC`,
+    [settings.id],
   );
 
-  const groups = groupsResult.rows as ReminderGroupRow[];
-  const recipients = recipientsResult.rows as ReminderRecipientRow[];
-
-  return groups
-    .filter((group) => group.enabled)
-    .map((group) => ({
-      id: group.id,
-      name: group.name,
-      recipients: recipients.filter((recipient) => recipient.group_id === group.id),
-    }))
-    .filter((group) => group.recipients.length > 0);
+  return {
+    enabled: settings.enabled,
+    recipients: recipientsResult.rows as BudgetRecipientRow[],
+  };
 }
 
 function buildRows(
@@ -329,7 +353,7 @@ function buildBudgetEmail(subscriptions: Subscription[], referenceDate: Date) {
             ${currentMonthItems}
 
             <p class="budget-copy" style="margin:20px 0 0;font-size:13px;line-height:1.6;color:#6b7280;">
-              Log in to SubTrack Pro to adjust budgets, update payment status, or review subscription changes before the month closes.
+              A downloadable PDF copy of this report is attached. Log in to SubTrack Pro to adjust budgets, update payment status, or review subscription changes before the month closes.
             </p>
           </div>
         </div>
@@ -344,9 +368,70 @@ async function sendZohoBudgetEmail(
   ccEmails: string[],
   subject: string,
   html: string,
+  pdf: Uint8Array,
+  fileName: string,
 ) {
   const accessToken = await getZohoAccessToken();
   const accountId = await getZohoAccountId(accessToken);
+  const pdfArrayBuffer = new ArrayBuffer(pdf.byteLength);
+  new Uint8Array(pdfArrayBuffer).set(pdf);
+  const attachmentForm = new FormData();
+  attachmentForm.append(
+    "attach",
+    new Blob([pdfArrayBuffer], { type: "application/pdf" }),
+    fileName,
+  );
+  const uploadResponse = await fetch(
+    `https://mail.zoho.com/api/accounts/${accountId}/messages/attachments?uploadType=multipart&isInline=false`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Zoho-oauthtoken ${accessToken}`,
+      },
+      body: attachmentForm,
+      cache: "no-store",
+    },
+  );
+  const uploadBody = await uploadResponse.text();
+  let uploadData: ZohoAttachmentResponse = {};
+  try {
+    uploadData = JSON.parse(uploadBody) as ZohoAttachmentResponse;
+  } catch {
+    if (!uploadResponse.ok) {
+      throw new Error(
+        `Failed to upload the monthly budget PDF to Zoho Mail (HTTP ${uploadResponse.status}): ${uploadBody.slice(0, 500)}`,
+      );
+    }
+  }
+  const uploadPayload = uploadData.data;
+  const attachment = Array.isArray(uploadPayload)
+    ? uploadPayload[0]
+    : uploadPayload && "storeName" in uploadPayload
+      ? uploadPayload
+      : undefined;
+  const uploadError =
+    uploadPayload && !Array.isArray(uploadPayload) && "moreInfo" in uploadPayload
+      ? uploadPayload.moreInfo
+      : undefined;
+
+  if (
+    !uploadResponse.ok ||
+    !attachment?.storeName ||
+    !attachment.attachmentName ||
+    !attachment.attachmentPath
+  ) {
+    const responseDetail = uploadBody.slice(0, 500);
+    throw new Error(
+      `Failed to upload the monthly budget PDF to Zoho Mail (HTTP ${uploadResponse.status}): ${
+        uploadError ||
+        uploadData.status?.description ||
+        responseDetail ||
+        "Zoho did not return attachment metadata."
+      }`,
+    );
+  }
+
   const response = await fetch(
     `https://mail.zoho.com/api/accounts/${accountId}/messages`,
     {
@@ -362,6 +447,13 @@ async function sendZohoBudgetEmail(
         subject,
         content: html,
         mailFormat: "html",
+        attachments: [
+          {
+            storeName: attachment.storeName,
+            attachmentName: attachment.attachmentName,
+            attachmentPath: attachment.attachmentPath,
+          },
+        ],
       }),
       cache: "no-store",
     },
@@ -374,43 +466,49 @@ async function sendZohoBudgetEmail(
 }
 
 export async function sendMonthlyBudgetReport(referenceDate = new Date()) {
-  const [subscriptions, groups] = await Promise.all([
+  const [subscriptions, delivery] = await Promise.all([
     getAllSubscriptions(),
-    getBudgetRecipients(),
+    getBudgetMailDelivery(),
   ]);
   const chargeableSubscriptions = subscriptions.filter(isChargeableSubscription);
+  const report = getBudgetReport(chargeableSubscriptions, referenceDate);
 
-  if (groups.length === 0) {
-    const report = getBudgetReport(chargeableSubscriptions, referenceDate);
+  if (!delivery.enabled || delivery.recipients.length === 0) {
     return {
       sent: 0,
       emailsSent: 0,
+      skipped: !delivery.enabled ? "disabled" : "no_recipients",
       previousMonthTotal: report.previousMonth.total,
       currentMonthTotal: report.currentMonth.total,
     };
   }
 
-  const { subject, html, report } = buildBudgetEmail(
+  const { subject, html } = buildBudgetEmail(
     chargeableSubscriptions,
     referenceDate,
   );
+  const pdf = await buildBudgetReportPdf(report, referenceDate);
+  const orderedEmails = [...delivery.recipients]
+    .sort((left, right) => left.sort_order - right.sort_order)
+    .map((recipient) => recipient.email.trim())
+    .filter(Boolean);
+  const primaryEmail =
+    delivery.recipients.find((recipient) => recipient.is_primary)?.email ||
+    orderedEmails[0];
+  const ccEmails = orderedEmails.filter((email) => email !== primaryEmail);
 
-  for (const group of groups) {
-    const orderedEmails = group.recipients
-      .sort((left, right) => left.sort_order - right.sort_order)
-      .map((recipient) => recipient.email.trim())
-      .filter(Boolean);
-    const primaryEmail =
-      group.recipients.find((recipient) => recipient.is_primary)?.email ||
-      orderedEmails[0];
-    const ccEmails = orderedEmails.filter((email) => email !== primaryEmail);
-
-    await sendZohoBudgetEmail(primaryEmail, ccEmails, subject, html);
-  }
+  await sendZohoBudgetEmail(
+    primaryEmail,
+    ccEmails,
+    subject,
+    html,
+    pdf,
+    getBudgetPdfFileName(report),
+  );
 
   return {
     sent: report.currentMonth.items.length,
-    emailsSent: groups.length,
+    emailsSent: 1,
     previousMonthTotal: report.previousMonth.total,
     currentMonthTotal: report.currentMonth.total,
   };
