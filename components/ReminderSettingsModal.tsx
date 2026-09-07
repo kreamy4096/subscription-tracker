@@ -171,7 +171,12 @@ export default function ReminderSettingsModal({
         }
 
         if (subscriptionsRes.ok && Array.isArray(subscriptionsData)) {
-          setAvailableSubscriptions(subscriptionsData);
+          setAvailableSubscriptions(
+            subscriptionsData.filter(
+              (item: Subscription) =>
+                item.action !== "FREE" && item.subscription !== "Free",
+            ),
+          );
         } else {
           setAvailableSubscriptions([]);
         }

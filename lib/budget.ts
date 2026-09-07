@@ -68,7 +68,11 @@ function getOccurrenceForMonth(
   subscription: Subscription,
   targetMonth: Date,
 ) {
-  if (subscription.action === "Canceled") {
+  if (
+    subscription.action === "Canceled" ||
+    subscription.action === "FREE" ||
+    subscription.subscription === "Free"
+  ) {
     return null;
   }
 

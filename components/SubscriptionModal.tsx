@@ -1,7 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import type { Subscription } from "@/lib/subscription-types";
+import {
+  normalizeSubscriptionPlan,
+  subscriptionPlanOptions,
+  type Subscription,
+} from "@/lib/subscription-types";
 import { getReminderStartDate } from "@/lib/subscription-dates";
 
 interface SubscriptionModalProps {
@@ -75,7 +79,10 @@ function getInitialFormState(subscription: Subscription | null) {
 
   return {
     tool: subscription.tool || "",
-    subscription: subscription.subscription || "",
+    subscription: normalizeSubscriptionPlan(
+      subscription.subscription,
+      subscription.action,
+    ),
     due_date: normalizedDate,
     billing_type: subscription.billing_type || "one_time",
     recurrence_day: subscription.recurrence_day ?? null,
@@ -105,7 +112,8 @@ export default function SubscriptionModal({
   const [showPassword, setShowPassword] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [error, setError] = useState("");
-  const reminderPreview = formData.due_date
+  const isFreePlan = formData.subscription === "Free";
+  const reminderPreview = !isFreePlan && formData.due_date
     ? getReminderStartDate(formData.due_date, 3)
     : "";
 
@@ -113,10 +121,36 @@ export default function SubscriptionModal({
     event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
     const { name, value } = event.target;
-    setFormData((current) => ({
-      ...current,
-      [name]: name === "price" ? normalizePriceValue(value) : value,
-    }));
+    setFormData((current) => {
+      if (name === "subscription") {
+        if (value === "Free") {
+          return {
+            ...current,
+            subscription: value,
+            due_date: "",
+            next_due_date: "",
+            billing_type: "one_time",
+            recurrence_day: null,
+            price: "$0",
+            action: "FREE",
+            payment_status: "",
+          };
+        }
+
+        return {
+          ...current,
+          subscription: value,
+          action: value === "PAYG" ? "PAYG Renewal" : "Renewal",
+          payment_status: current.payment_status || "Pending",
+          price: current.price === "$0" ? "" : current.price,
+        };
+      }
+
+      return {
+        ...current,
+        [name]: name === "price" ? normalizePriceValue(value) : value,
+      };
+    });
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -124,14 +158,25 @@ export default function SubscriptionModal({
     setIsSaving(true);
     setError("");
 
-    const payload = {
-      ...formData,
-      next_due_date: formData.due_date,
-      recurrence_day:
-        formData.billing_type === "one_time" || !formData.due_date
-          ? null
-          : Number.parseInt(formData.due_date.slice(8, 10), 10),
-    };
+    const payload = isFreePlan
+      ? {
+          ...formData,
+          due_date: "",
+          next_due_date: "",
+          billing_type: "one_time" as const,
+          recurrence_day: null,
+          price: "$0",
+          action: "FREE",
+          payment_status: "",
+        }
+      : {
+          ...formData,
+          next_due_date: formData.due_date,
+          recurrence_day:
+            formData.billing_type === "one_time" || !formData.due_date
+              ? null
+              : Number.parseInt(formData.due_date.slice(8, 10), 10),
+        };
 
     const endpoint =
       mode === "edit" && subscription
@@ -280,49 +325,72 @@ export default function SubscriptionModal({
               <span className="mb-2 block text-label-md font-semibold text-on-surface">
                 Plan / Subscription
               </span>
-              <input
+              <select
                 name="subscription"
                 value={formData.subscription}
                 onChange={handleChange}
-                placeholder="Premium Plan"
-                className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low ui-control-pad text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-label-md font-semibold text-on-surface">
-                Next Due Date
-              </span>
-              <input
-                name="due_date"
-                value={formData.due_date}
-                onChange={handleChange}
-                type="date"
-                className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low ui-control-pad text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
-              />
-              <p className="mt-2 text-label-sm text-secondary">
-                The reminder engine tracks this exact date.
-              </p>
-            </label>
-
-            <label className="block">
-              <span className="mb-2 block text-label-md font-semibold text-on-surface">
-                Billing Cadence
-              </span>
-              <select
-                name="billing_type"
-                value={formData.billing_type}
-                onChange={handleChange}
+                required
                 className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low ui-control-pad text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
               >
-                <option value="one_time">One-time</option>
-                <option value="monthly">Monthly</option>
-                <option value="yearly">Yearly</option>
+                <option value="" disabled>
+                  Select a plan type
+                </option>
+                {subscriptionPlanOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
               </select>
-              <p className="mt-2 text-label-sm text-secondary">
-                Recurring plans advance after they are marked paid.
-              </p>
             </label>
+
+            {isFreePlan ? (
+              <div className="rounded-xl border border-primary/20 bg-primary-fixed/40 ui-panel-pad md:col-span-2">
+                <p className="text-label-md font-semibold text-primary">
+                  Free subscription
+                </p>
+                <p className="mt-1 text-body-md text-on-surface-variant">
+                  No billing details are needed. The action is set to FREE, and
+                  this subscription will not appear in renewal reminder emails.
+                </p>
+              </div>
+            ) : (
+              <>
+                <label className="block">
+                  <span className="mb-2 block text-label-md font-semibold text-on-surface">
+                    Next Due Date
+                  </span>
+                  <input
+                    name="due_date"
+                    value={formData.due_date}
+                    onChange={handleChange}
+                    type="date"
+                    className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low ui-control-pad text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                  />
+                  <p className="mt-2 text-label-sm text-secondary">
+                    The reminder engine tracks this exact date.
+                  </p>
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-label-md font-semibold text-on-surface">
+                    Billing Cadence
+                  </span>
+                  <select
+                    name="billing_type"
+                    value={formData.billing_type}
+                    onChange={handleChange}
+                    className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low ui-control-pad text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="one_time">One-time</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                  <p className="mt-2 text-label-sm text-secondary">
+                    Recurring plans advance after they are marked paid.
+                  </p>
+                </label>
+              </>
+            )}
 
             {reminderPreview ? (
               <div className="rounded-xl border border-primary/20 bg-primary-fixed/40 ui-panel-pad md:col-span-2">
@@ -344,7 +412,7 @@ export default function SubscriptionModal({
               </div>
             ) : null}
 
-            <label className="block">
+            {!isFreePlan ? <label className="block">
               <span className="mb-2 block text-label-md font-semibold text-on-surface">
                 Price
               </span>
@@ -370,7 +438,7 @@ export default function SubscriptionModal({
                   className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low pr-[13px] pl-[29px] text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
                 />
               </div>
-            </label>
+            </label> : null}
 
             <label className="block">
               <span className="mb-2 block text-label-md font-semibold text-on-surface">
@@ -415,7 +483,7 @@ export default function SubscriptionModal({
               </div>
             </label>
 
-            <label className="block">
+            {!isFreePlan ? <label className="block">
               <span className="mb-2 block text-label-md font-semibold text-on-surface">
                 Action
               </span>
@@ -429,11 +497,10 @@ export default function SubscriptionModal({
                 <option value="PAYG Renewal">PAYG Renewal</option>
                 <option value="Upgrade">Upgrade</option>
                 <option value="Canceled">Canceled</option>
-                <option value="FREE">FREE</option>
               </select>
-            </label>
+            </label> : null}
 
-            <label className="block">
+            {!isFreePlan ? <label className="block">
               <span className="mb-2 block text-label-md font-semibold text-on-surface">
                 Payment Status
               </span>
@@ -447,7 +514,7 @@ export default function SubscriptionModal({
                 <option value="Pending">Pending</option>
                 <option value="Not Paid">Not Paid</option>
               </select>
-            </label>
+            </label> : null}
           </div>
 
           {error ? (

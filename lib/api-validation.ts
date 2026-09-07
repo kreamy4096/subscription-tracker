@@ -1,6 +1,7 @@
 import "server-only";
 
 import { isValidDateInput } from "@/lib/subscription-dates";
+import { subscriptionPlanOptions } from "@/lib/subscription-types";
 
 export interface SubscriptionInput {
   tool: string;
@@ -18,6 +19,11 @@ export interface SubscriptionInput {
 
 export interface ReminderSettingsInput {
   groups: ReminderGroupInput[];
+}
+
+export interface BudgetMailSettingsInput {
+  enabled: boolean;
+  recipients: ReminderRecipientInput[];
 }
 
 export interface ReminderGroupInput {
@@ -47,6 +53,7 @@ const actions = new Set([
 ]);
 const paymentStatuses = new Set(["Paid", "Pending", "Not Paid", ""]);
 const billingTypes = new Set(["one_time", "monthly", "yearly"]);
+const subscriptionPlans = new Set<string>(subscriptionPlanOptions);
 
 function cleanString(value: unknown, maxLength: number) {
   if (typeof value !== "string") {
@@ -86,6 +93,20 @@ export function parseSubscriptionInput(value: unknown) {
     return { error: "Tool name is required" };
   }
 
+  if (!subscriptionPlans.has(parsed.subscription)) {
+    return { error: "Plan / Subscription is invalid" };
+  }
+
+  if (parsed.subscription === "Free") {
+    parsed.due_date = "";
+    parsed.billing_type = "one_time";
+    parsed.recurrence_day = null;
+    parsed.next_due_date = "";
+    parsed.price = "$0";
+    parsed.action = "FREE";
+    parsed.payment_status = "";
+  }
+
   if (!parsed.next_due_date) {
     parsed.next_due_date = parsed.due_date;
   }
@@ -110,11 +131,84 @@ export function parseSubscriptionInput(value: unknown) {
     return { error: "Action is invalid" };
   }
 
+  if (parsed.subscription !== "Free" && parsed.action === "FREE") {
+    return { error: "Only Free plans can use the FREE action" };
+  }
+
   if (!paymentStatuses.has(parsed.payment_status)) {
     return { error: "Payment status is invalid" };
   }
 
   return { data: parsed };
+}
+
+export function parseBudgetMailSettingsInput(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return { error: "Invalid request body" };
+  }
+
+  const input = value as Record<string, unknown>;
+  const rawRecipients = Array.isArray(input.recipients) ? input.recipients : [];
+  const recipients = rawRecipients
+    .map((recipientValue, index) => {
+      const recipient =
+        recipientValue && typeof recipientValue === "object"
+          ? (recipientValue as Record<string, unknown>)
+          : {};
+
+      return {
+        id: cleanString(recipient.id, 80) || undefined,
+        email: cleanString(recipient.email, 254).toLowerCase(),
+        is_primary: recipient.is_primary === true,
+        is_active: recipient.is_active !== false,
+        sort_order: Number.isInteger(Number(recipient.sort_order))
+          ? Number(recipient.sort_order)
+          : index,
+      };
+    })
+    .filter((recipient) => recipient.email)
+    .sort((left, right) => left.sort_order - right.sort_order);
+
+  const emailKeys = new Set<string>();
+  for (const recipient of recipients) {
+    if (!isValidEmail(recipient.email)) {
+      return { error: "Each budget report email must be a valid email address" };
+    }
+
+    if (emailKeys.has(recipient.email)) {
+      return { error: "Budget report emails must be unique" };
+    }
+
+    emailKeys.add(recipient.email);
+  }
+
+  const enabled = input.enabled === true;
+  const activeRecipients = recipients.filter((recipient) => recipient.is_active);
+  if (enabled && activeRecipients.length === 0) {
+    return { error: "Enabled budget reports need at least one active email" };
+  }
+
+  const firstPrimaryIndex = recipients.findIndex(
+    (recipient) => recipient.is_primary && recipient.is_active,
+  );
+  const firstActiveIndex = recipients.findIndex((recipient) => recipient.is_active);
+  const normalizedRecipients = recipients.map((recipient, index) => ({
+    ...recipient,
+    sort_order: index,
+    is_primary:
+      recipient.is_active &&
+      activeRecipients.length > 0 &&
+      (firstPrimaryIndex === -1
+        ? index === firstActiveIndex
+        : index === firstPrimaryIndex),
+  }));
+
+  return {
+    data: {
+      enabled,
+      recipients: normalizedRecipients,
+    } satisfies BudgetMailSettingsInput,
+  };
 }
 
 export function parseReminderSettingsInput(value: unknown) {

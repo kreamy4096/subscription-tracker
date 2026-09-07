@@ -255,6 +255,8 @@ async function getUnpaidSubscriptions() {
     `SELECT id, tool, subscription, due_date, billing_type, recurrence_day, next_due_date, price, login_email, action, payment_status, created_at
      FROM subscriptions
      WHERE COALESCE(payment_status, '') != 'Paid'
+       AND COALESCE(action, '') != 'FREE'
+       AND COALESCE(subscription, '') != 'Free'
      ORDER BY created_at DESC`,
   );
 

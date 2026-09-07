@@ -34,6 +34,34 @@ export interface ReminderGroup {
   updated_at?: string;
 }
 
+export const subscriptionPlanOptions = [
+  "Free",
+  "Paid",
+  "PAYG",
+  "Pro(The Zone)",
+] as const;
+
+export type SubscriptionPlan = (typeof subscriptionPlanOptions)[number];
+
+export function normalizeSubscriptionPlan(value: unknown, action?: unknown) {
+  if (
+    typeof value === "string" &&
+    subscriptionPlanOptions.includes(value as SubscriptionPlan)
+  ) {
+    return value as SubscriptionPlan;
+  }
+
+  if (action === "FREE") {
+    return "Free";
+  }
+
+  if (action === "PAYG Renewal") {
+    return "PAYG";
+  }
+
+  return "Paid";
+}
+
 export interface ReminderRecipient {
   id: string;
   group_id?: string;
@@ -42,5 +70,12 @@ export interface ReminderRecipient {
   is_active: boolean;
   sort_order: number;
   created_at?: string;
+  updated_at?: string;
+}
+
+export interface BudgetMailSettings {
+  id?: string;
+  enabled: boolean;
+  recipients: ReminderRecipient[];
   updated_at?: string;
 }
