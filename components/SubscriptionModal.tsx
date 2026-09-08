@@ -244,7 +244,7 @@ export default function SubscriptionModal({
             billing_type: "monthly" as const,
             recurrence_day: null,
             price: formData.estimated_monthly_budget || "",
-            action: "PAYG Renewal",
+            action: mode === "add" ? "PAYG Renewal" : formData.action,
           }
         : {
           ...formData,

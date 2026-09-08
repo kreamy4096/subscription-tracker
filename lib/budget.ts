@@ -114,6 +114,18 @@ function getPaygLineItem(subscription: Subscription, targetMonth: Date) {
     return null;
   }
 
+  const firstTopUpDate = [...(subscription.payg_top_ups ?? [])]
+    .map((topUp) => parseIsoDate(topUp.date))
+    .filter((date): date is Date => Boolean(date))
+    .sort((left, right) => left.getTime() - right.getTime())[0];
+  const reportingAnchor = firstTopUpDate || parseIsoDate(subscription.created_at);
+  if (
+    reportingAnchor &&
+    startOfMonth(targetMonth).getTime() < startOfMonth(reportingAnchor).getTime()
+  ) {
+    return null;
+  }
+
   const targetKey = monthKey(targetMonth);
   const monthlyTopUps = (subscription.payg_top_ups ?? []).filter((topUp) =>
     topUp.date.startsWith(`${targetKey}-`),

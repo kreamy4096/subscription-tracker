@@ -59,19 +59,23 @@ export async function syncAutomaticPaymentStatuses(now = new Date()) {
           ? addBillingCycle(currentDueDate, billingType)
           : null;
 
-        await query(
+        const updateResult = await query(
           `UPDATE subscriptions
            SET payment_status = 'Paid',
                status_changed_at = $1,
                auto_paid_at = $1,
                next_due_date = CASE WHEN $2::date IS NULL THEN next_due_date ELSE $2::date END,
-               due_date = CASE WHEN $2::date IS NULL THEN due_date ELSE $2 END
-           WHERE id = $3`,
-          [now, nextDueDate, row.id],
+               due_date = CASE WHEN $2::date IS NULL THEN due_date ELSE $2::date::text END
+           WHERE id = $3
+             AND payment_status = $4
+             AND status_changed_at IS NOT DISTINCT FROM $5`,
+          [now, nextDueDate, row.id, currentStatus, row.status_changed_at],
         );
 
-        movedToPaid += 1;
-        if (shouldAdvance) {
+        if (updateResult.rowCount === 1) {
+          movedToPaid += 1;
+        }
+        if (updateResult.rowCount === 1 && shouldAdvance) {
           advancedCycles += 1;
         }
       }
@@ -94,16 +98,18 @@ export async function syncAutomaticPaymentStatuses(now = new Date()) {
     const nextStatus = getAutomaticPaymentStatus(dueDate, currentStatus, now);
 
     if (nextStatus !== currentStatus) {
-      await query(
+      const updateResult = await query(
         `UPDATE subscriptions
          SET payment_status = $1,
              status_changed_at = $2,
              auto_paid_at = CASE WHEN $1 = 'Not Paid' THEN NULL ELSE auto_paid_at END
-         WHERE id = $3`,
-        [nextStatus, now, row.id],
+         WHERE id = $3
+           AND payment_status = $4
+           AND status_changed_at IS NOT DISTINCT FROM $5`,
+        [nextStatus, now, row.id, currentStatus, row.status_changed_at],
       );
 
-      if (nextStatus === "Not Paid") {
+      if (updateResult.rowCount === 1 && nextStatus === "Not Paid") {
         movedToNotPaid += 1;
       }
     }

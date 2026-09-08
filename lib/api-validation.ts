@@ -138,7 +138,7 @@ export function parseSubscriptionInput(value: unknown) {
     parsed.next_due_date = "";
     parsed.billing_type = "monthly";
     parsed.recurrence_day = null;
-    parsed.action = "PAYG Renewal";
+    parsed.action = parsed.action || "PAYG Renewal";
 
     if (!parsed.estimated_monthly_budget) {
       return { error: "Estimated monthly budget is required for PAYG plans" };
