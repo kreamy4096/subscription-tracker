@@ -4,7 +4,7 @@ import { requireBasicAuth } from "@/lib/auth";
 import { encryptCredential } from "@/lib/credentials";
 import { query } from "@/lib/db";
 import { serializeSubscriptionRow } from "@/lib/subscription-serialization";
-import { getAutomaticPaymentStatus } from "@/lib/subscription-dates";
+import { syncAutomaticPaymentStatuses } from "@/lib/payment-status-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -19,36 +19,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const statusSyncResult = await query(
-      `SELECT id, next_due_date, due_date, payment_status
-       FROM subscriptions
-       WHERE COALESCE(action, '') != 'FREE'
-         AND COALESCE(subscription, '') != 'Free'`,
-    );
-
-    await Promise.all(
-      statusSyncResult.rows.map(async (row) => {
-        const nextDueDate =
-          typeof row.next_due_date === "string"
-            ? row.next_due_date.slice(0, 10)
-            : row.next_due_date instanceof Date
-              ? row.next_due_date.toISOString().slice(0, 10)
-              : typeof row.due_date === "string"
-                ? row.due_date
-                : "";
-        const nextStatus = getAutomaticPaymentStatus(
-          nextDueDate,
-          String(row.payment_status ?? ""),
-        );
-
-        if (nextStatus !== String(row.payment_status ?? "")) {
-          await query(
-            "UPDATE subscriptions SET payment_status = $1 WHERE id = $2",
-            [nextStatus, row.id],
-          );
-        }
-      }),
-    );
+    await syncAutomaticPaymentStatuses();
 
     const result = await query(
       `SELECT
@@ -60,6 +31,10 @@ export async function GET(request: Request) {
         recurrence_day,
         next_due_date,
         price,
+        estimated_monthly_budget,
+        last_top_up_date,
+        current_balance,
+        payg_top_ups,
         login_email,
         login_password,
         login_password_ciphertext,
@@ -110,6 +85,10 @@ export async function POST(request: Request) {
       recurrence_day,
       next_due_date,
       price,
+      estimated_monthly_budget,
+      last_top_up_date,
+      current_balance,
+      payg_top_ups,
       login_email,
       login_password,
       action,
@@ -129,6 +108,10 @@ export async function POST(request: Request) {
         recurrence_day,
         next_due_date,
         price,
+        estimated_monthly_budget,
+        last_top_up_date,
+        current_balance,
+        payg_top_ups,
         login_email,
         login_password,
         login_password_ciphertext,
@@ -136,7 +119,7 @@ export async function POST(request: Request) {
         login_password_tag,
         action,
         payment_status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, $9, $10, $11, $12, $13)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, NULL, $13, $14, $15, $16, $17)
       RETURNING
         id,
         tool,
@@ -146,6 +129,10 @@ export async function POST(request: Request) {
         recurrence_day,
         next_due_date,
         price,
+        estimated_monthly_budget,
+        last_top_up_date,
+        current_balance,
+        payg_top_ups,
         login_email,
         login_password,
         login_password_ciphertext,
@@ -166,6 +153,10 @@ export async function POST(request: Request) {
         recurrence_day,
         next_due_date || null,
         price,
+        estimated_monthly_budget || null,
+        last_top_up_date || null,
+        current_balance || null,
+        JSON.stringify(payg_top_ups),
         login_email,
         encryptedPassword?.ciphertext ?? null,
         encryptedPassword?.iv ?? null,

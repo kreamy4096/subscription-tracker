@@ -1,5 +1,6 @@
 import type { Subscription } from "@/lib/subscription-types";
 import { query } from "@/lib/db";
+import { syncAutomaticPaymentStatuses } from "@/lib/payment-status-sync";
 
 interface ReminderGroupRow {
   id: string;
@@ -256,7 +257,7 @@ async function getUnpaidSubscriptions() {
      FROM subscriptions
      WHERE COALESCE(payment_status, '') != 'Paid'
        AND COALESCE(action, '') != 'FREE'
-       AND COALESCE(subscription, '') != 'Free'
+       AND COALESCE(subscription, '') NOT IN ('Free', 'PAYG')
      ORDER BY created_at DESC`,
   );
 
@@ -538,6 +539,7 @@ async function sendZohoReminderEmail(
 }
 
 export async function sendDueReminders() {
+  await syncAutomaticPaymentStatuses();
   const groups = await getReminderGroups();
   const skipped = {
     disabledGroups: 0,

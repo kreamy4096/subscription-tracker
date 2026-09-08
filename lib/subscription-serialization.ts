@@ -5,9 +5,13 @@ import {
   type Subscription,
 } from "@/lib/subscription-types";
 
-type SubscriptionRow = Omit<Partial<Subscription>, "next_due_date"> & {
+type SubscriptionRow = Omit<
+  Partial<Subscription>,
+  "next_due_date" | "last_top_up_date"
+> & {
   id: string;
   next_due_date?: string | Date | null;
+  last_top_up_date?: string | Date | null;
   login_password_ciphertext?: string | null;
   login_password_iv?: string | null;
   login_password_tag?: string | null;
@@ -18,6 +22,10 @@ export function serializeSubscriptionRow(row: SubscriptionRow): Subscription {
     row.next_due_date instanceof Date
       ? row.next_due_date.toISOString().slice(0, 10)
       : row.next_due_date;
+  const lastTopUpDate =
+    row.last_top_up_date instanceof Date
+      ? row.last_top_up_date.toISOString().slice(0, 10)
+      : row.last_top_up_date;
 
   return {
     id: row.id,
@@ -28,6 +36,17 @@ export function serializeSubscriptionRow(row: SubscriptionRow): Subscription {
     recurrence_day: row.recurrence_day ?? null,
     next_due_date: nextDueDate ?? row.due_date ?? "",
     price: row.price ?? "",
+    estimated_monthly_budget:
+      row.estimated_monthly_budget ??
+      (normalizeSubscriptionPlan(row.subscription, row.action) === "PAYG"
+        ? row.price ?? ""
+        : ""),
+    last_top_up_date: lastTopUpDate ??
+      (normalizeSubscriptionPlan(row.subscription, row.action) === "PAYG"
+        ? row.due_date ?? ""
+        : ""),
+    current_balance: row.current_balance ?? "",
+    payg_top_ups: Array.isArray(row.payg_top_ups) ? row.payg_top_ups : [],
     login_email: row.login_email ?? "",
     login_password: decryptPasswordSafely(row),
     has_login_password:

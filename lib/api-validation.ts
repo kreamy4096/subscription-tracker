@@ -1,7 +1,7 @@
 import "server-only";
 
 import { isValidDateInput } from "@/lib/subscription-dates";
-import { subscriptionPlanOptions } from "@/lib/subscription-types";
+import { subscriptionPlanOptions, type PaygTopUp } from "@/lib/subscription-types";
 
 export interface SubscriptionInput {
   tool: string;
@@ -11,6 +11,10 @@ export interface SubscriptionInput {
   recurrence_day: number | null;
   next_due_date: string;
   price: string;
+  estimated_monthly_budget: string;
+  last_top_up_date: string;
+  current_balance: string;
+  payg_top_ups: PaygTopUp[];
   login_email: string;
   login_password: string;
   action: string;
@@ -83,6 +87,21 @@ export function parseSubscriptionInput(value: unknown) {
     recurrence_day: null,
     next_due_date: cleanString(input.next_due_date, 10),
     price: cleanString(input.price, 40),
+    estimated_monthly_budget: cleanString(input.estimated_monthly_budget, 40),
+    last_top_up_date: cleanString(input.last_top_up_date, 10),
+    current_balance: cleanString(input.current_balance, 40),
+    payg_top_ups: Array.isArray(input.payg_top_ups)
+      ? input.payg_top_ups.map((value, index) => {
+          const topUp = value && typeof value === "object"
+            ? (value as Record<string, unknown>)
+            : {};
+          return {
+            id: cleanString(topUp.id, 80) || `topup-${index}`,
+            date: cleanString(topUp.date, 10),
+            amount: cleanString(topUp.amount, 40),
+          };
+        })
+      : [],
     login_email: cleanString(input.login_email, 254),
     login_password: cleanString(input.login_password, 512),
     action: cleanString(input.action, 40),
@@ -105,9 +124,60 @@ export function parseSubscriptionInput(value: unknown) {
     parsed.price = "$0";
     parsed.action = "FREE";
     parsed.payment_status = "";
+    parsed.estimated_monthly_budget = "";
+    parsed.last_top_up_date = "";
+    parsed.current_balance = "";
+    parsed.payg_top_ups = [];
   }
 
-  if (!parsed.next_due_date) {
+  if (parsed.subscription === "PAYG") {
+    parsed.estimated_monthly_budget = parsed.estimated_monthly_budget || parsed.price;
+    parsed.price = parsed.estimated_monthly_budget;
+    parsed.last_top_up_date = parsed.last_top_up_date || parsed.due_date;
+    parsed.due_date = parsed.last_top_up_date;
+    parsed.next_due_date = "";
+    parsed.billing_type = "monthly";
+    parsed.recurrence_day = null;
+    parsed.action = "PAYG Renewal";
+
+    if (!parsed.estimated_monthly_budget) {
+      return { error: "Estimated monthly budget is required for PAYG plans" };
+    }
+    const estimatedBudget = Number.parseFloat(
+      parsed.estimated_monthly_budget.replace(/[^0-9.]/g, ""),
+    );
+    if (!Number.isFinite(estimatedBudget) || estimatedBudget <= 0) {
+      return { error: "Estimated monthly budget must be greater than zero" };
+    }
+    if (parsed.current_balance) {
+      const currentBalance = Number.parseFloat(
+        parsed.current_balance.replace(/[^0-9.]/g, ""),
+      );
+      if (!Number.isFinite(currentBalance) || currentBalance < 0) {
+        return { error: "Current balance must be zero or greater" };
+      }
+    }
+    if (parsed.last_top_up_date && !isValidDateInput(parsed.last_top_up_date)) {
+      return { error: "Last top-up date must be a valid calendar date" };
+    }
+    for (const topUp of parsed.payg_top_ups) {
+      if (!isValidDateInput(topUp.date)) {
+        return { error: "Each top-up entry needs a valid date" };
+      }
+      const amount = Number.parseFloat(topUp.amount.replace(/[^0-9.]/g, ""));
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return { error: "Each top-up amount must be greater than zero" };
+      }
+    }
+    const latestLoggedTopUp = [...parsed.payg_top_ups]
+      .sort((left, right) => right.date.localeCompare(left.date))[0];
+    if (latestLoggedTopUp) {
+      parsed.last_top_up_date = latestLoggedTopUp.date;
+      parsed.due_date = latestLoggedTopUp.date;
+    }
+  }
+
+  if (!parsed.next_due_date && parsed.subscription !== "PAYG") {
     parsed.next_due_date = parsed.due_date;
   }
 
@@ -115,7 +185,7 @@ export function parseSubscriptionInput(value: unknown) {
     return { error: "Next due date must be a valid calendar date" };
   }
 
-  if (parsed.billing_type !== "one_time") {
+  if (parsed.billing_type !== "one_time" && parsed.subscription !== "PAYG") {
     if (!parsed.next_due_date) {
       return { error: "Recurring subscriptions need a next due date" };
     }

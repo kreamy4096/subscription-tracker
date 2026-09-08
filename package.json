@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:budget": "node --test --test-isolation=none tests/budget.test.ts",
+    "test:payment-status": "node --test --test-isolation=none tests/payment-status.test.ts",
     "test:reminder-email": "node scripts/test-reminder-email.mjs"
   },
   "dependencies": {

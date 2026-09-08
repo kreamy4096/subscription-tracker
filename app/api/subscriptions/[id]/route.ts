@@ -30,6 +30,10 @@ export async function PUT(
       recurrence_day,
       next_due_date,
       price,
+      estimated_monthly_budget,
+      last_top_up_date,
+      current_balance,
+      payg_top_ups,
       login_email,
       login_password,
       action,
@@ -67,12 +71,14 @@ export async function PUT(
     const shouldAdvanceRecurringCycle =
       payment_status === "Paid" &&
       existing.payment_status !== "Paid" &&
-      billing_type !== "one_time";
+      billing_type !== "one_time" && subscription !== "PAYG";
     const savedNextDueDate = shouldAdvanceRecurringCycle
       ? addBillingCycle(nextDueDateValue || next_due_date || due_date, billing_type)
       : next_due_date;
     const savedDueDate = shouldAdvanceRecurringCycle ? savedNextDueDate : due_date;
-    const savedPaymentStatus = shouldAdvanceRecurringCycle
+    const savedPaymentStatus = subscription === "PAYG"
+      ? payment_status
+      : shouldAdvanceRecurringCycle
       ? "Paid"
       : payment_status === "Paid"
         ? getAutomaticPaymentStatus(
@@ -90,14 +96,29 @@ export async function PUT(
         recurrence_day = $5,
         next_due_date = $6,
         price = $7,
-        login_email = $8,
-        login_password = CASE WHEN $9::text IS NULL THEN login_password ELSE NULL END,
-        login_password_ciphertext = COALESCE($9, login_password_ciphertext),
-        login_password_iv = COALESCE($10, login_password_iv),
-        login_password_tag = COALESCE($11, login_password_tag),
-        action = $12,
-        payment_status = $13
-      WHERE id = $14
+        estimated_monthly_budget = $8,
+        last_top_up_date = $9,
+        current_balance = $10,
+        payg_top_ups = $11::jsonb,
+        login_email = $12,
+        login_password = CASE WHEN $13::text IS NULL THEN login_password ELSE NULL END,
+        login_password_ciphertext = COALESCE($13, login_password_ciphertext),
+        login_password_iv = COALESCE($14, login_password_iv),
+        login_password_tag = COALESCE($15, login_password_tag),
+        action = $16,
+        status_changed_at = CASE
+          WHEN payment_status IS DISTINCT FROM $17 THEN now()
+          ELSE status_changed_at
+        END,
+        auto_paid_at = CASE
+          WHEN due_date IS DISTINCT FROM $3
+            OR next_due_date IS DISTINCT FROM $6::date THEN NULL
+          WHEN payment_status IS DISTINCT FROM $17 AND $17 = 'Not Paid' THEN NULL
+          WHEN payment_status = 'Not Paid' AND $17 = 'Paid' THEN now()
+          ELSE auto_paid_at
+        END,
+        payment_status = $17
+      WHERE id = $18
       RETURNING
         id,
         tool,
@@ -107,6 +128,10 @@ export async function PUT(
         recurrence_day,
         next_due_date,
         price,
+        estimated_monthly_budget,
+        last_top_up_date,
+        current_balance,
+        payg_top_ups,
         login_email,
         login_password,
         login_password_ciphertext,
@@ -127,6 +152,10 @@ export async function PUT(
         recurrence_day,
         savedNextDueDate || null,
         price,
+        estimated_monthly_budget || null,
+        last_top_up_date || null,
+        current_balance || null,
+        JSON.stringify(payg_top_ups),
         login_email,
         encryptedPassword?.ciphertext ?? null,
         encryptedPassword?.iv ?? null,
@@ -170,7 +199,7 @@ export async function DELETE(
     const result = await query(
       `DELETE FROM subscriptions
        WHERE id = $1
-       RETURNING id, tool, subscription, due_date, billing_type, recurrence_day, next_due_date, price, login_email, action, payment_status, created_at`,
+       RETURNING id, tool, subscription, due_date, billing_type, recurrence_day, next_due_date, price, estimated_monthly_budget, last_top_up_date, current_balance, payg_top_ups, login_email, action, payment_status, created_at`,
       [id],
     );
 

@@ -1,3 +1,9 @@
+export interface PaygTopUp {
+  id: string;
+  date: string;
+  amount: string;
+}
+
 export interface Subscription {
   id: string;
   tool: string;
@@ -7,6 +13,10 @@ export interface Subscription {
   recurrence_day?: number | null;
   next_due_date?: string;
   price: string;
+  estimated_monthly_budget?: string;
+  last_top_up_date?: string;
+  current_balance?: string;
+  payg_top_ups?: PaygTopUp[];
   login_email: string;
   login_password?: string;
   has_login_password?: boolean;

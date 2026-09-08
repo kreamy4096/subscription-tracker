@@ -1,5 +1,7 @@
 export type BillingType = "one_time" | "monthly" | "yearly";
 
+const AUTO_PAID_DELAY_MS = 24 * 60 * 60 * 1000;
+
 const billingTypes = new Set<BillingType>(["one_time", "monthly", "yearly"]);
 
 export function normalizeBillingType(value: unknown): BillingType {
@@ -96,4 +98,24 @@ export function getAutomaticPaymentStatus(
   }
 
   return "Paid";
+}
+
+export function shouldAutomaticallySettle(
+  currentStatus: string,
+  statusChangedAt: string | Date | null | undefined,
+  now = new Date(),
+) {
+  if (currentStatus !== "Not Paid" || !statusChangedAt) {
+    return false;
+  }
+
+  const changedAt =
+    statusChangedAt instanceof Date
+      ? statusChangedAt.getTime()
+      : new Date(statusChangedAt).getTime();
+
+  return (
+    Number.isFinite(changedAt) &&
+    now.getTime() - changedAt >= AUTO_PAID_DELAY_MS
+  );
 }

@@ -80,3 +80,5 @@ The included `vercel.json` runs `/api/reminders/send` at `0 7 * * *`, which is 8
 - Reminder recipient email is read dynamically from the `reminder_settings` table.
 - Zoho access tokens are refreshed on demand before each email send.
 - Subscriptions marked `Paid` are excluded from reminder emails.
+- Non-free subscriptions automatically settle to `Paid` after spending 24 hours
+  in `Not Paid`. Recurring subscriptions also advance to their next billing date.

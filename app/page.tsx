@@ -88,6 +88,16 @@ function normalizeSubscription(
     recurrence_day: item.recurrence_day ?? null,
     next_due_date: item.next_due_date ?? item.due_date ?? "",
     price: item.price ?? "",
+    estimated_monthly_budget: item.estimated_monthly_budget ??
+      (normalizeSubscriptionPlan(item.subscription, item.action) === "PAYG"
+        ? item.price ?? ""
+        : ""),
+    last_top_up_date: item.last_top_up_date ??
+      (normalizeSubscriptionPlan(item.subscription, item.action) === "PAYG"
+        ? item.due_date ?? ""
+        : ""),
+    current_balance: item.current_balance ?? "",
+    payg_top_ups: item.payg_top_ups ?? [],
     login_email: item.login_email ?? "",
     login_password: item.login_password ?? "",
     has_login_password:
@@ -1438,7 +1448,7 @@ export default function Home() {
                   <table className="w-full min-w-[520px] border-collapse text-left">
                     <thead>
                       <tr className="bg-surface-container-low">
-                        {["Tool", "Plan", "Due Date", "Price"].map((heading) => (
+                        {["Tool", "Plan", "Date / Basis", "Amount"].map((heading) => (
                           <th
                             key={heading}
                             className="ui-table-cell text-label-md tracking-wider text-secondary uppercase"
@@ -1465,7 +1475,11 @@ export default function Home() {
                               {item.subscription || "-"}
                             </td>
                             <td className="ui-table-cell text-body-md text-on-surface-variant">
-                              {formatDueDate(item.dueDate)}
+                              {item.amountSource === "payg_actual"
+                                ? "Actual top-ups"
+                                : item.amountSource === "payg_estimate"
+                                  ? "Estimated budget"
+                                  : formatDueDate(item.dueDate)}
                             </td>
                             <td className="ui-table-cell text-body-md font-semibold text-on-surface">
                               {item.price || formatCurrency(item.amount)}
@@ -1491,7 +1505,7 @@ export default function Home() {
                   <table className="w-full min-w-[520px] border-collapse text-left">
                     <thead>
                       <tr className="bg-surface-container-low">
-                        {["Tool", "Plan", "Due Date", "Price"].map((heading) => (
+                        {["Tool", "Plan", "Date / Basis", "Amount"].map((heading) => (
                           <th
                             key={heading}
                             className="ui-table-cell text-label-md tracking-wider text-secondary uppercase"
@@ -1518,7 +1532,11 @@ export default function Home() {
                               {item.subscription || "-"}
                             </td>
                             <td className="ui-table-cell text-body-md text-on-surface-variant">
-                              {formatDueDate(item.dueDate)}
+                              {item.amountSource === "payg_actual"
+                                ? "Actual top-ups"
+                                : item.amountSource === "payg_estimate"
+                                  ? "Estimated budget"
+                                  : formatDueDate(item.dueDate)}
                             </td>
                             <td className="ui-table-cell text-body-md font-semibold text-on-surface">
                               {item.price || formatCurrency(item.amount)}
@@ -1589,8 +1607,8 @@ export default function Home() {
                   {[
                     "Tool",
                     "Plan",
-                    "Due Date",
-                    "Price",
+                    "Due Date / Last Top-up",
+                    "Price / Budget",
                     "Credentials",
                     "Action",
                     "Status",
@@ -1644,10 +1662,23 @@ export default function Home() {
                         {item.subscription || "-"}
                       </td>
                       <td className="ui-table-cell text-body-md text-on-surface-variant">
-                        {formatDueDate(item.due_date)}
+                        {formatDueDate(
+                          item.subscription === "PAYG"
+                            ? item.last_top_up_date || item.due_date
+                            : item.due_date,
+                        )}
                       </td>
                       <td className="ui-table-cell text-body-md font-semibold text-on-surface">
-                        {item.price || "-"}
+                        <div>
+                          {item.subscription === "PAYG"
+                            ? item.estimated_monthly_budget || item.price || "-"
+                            : item.price || "-"}
+                          {item.subscription === "PAYG" && item.current_balance ? (
+                            <p className="mt-1 text-label-sm font-normal text-secondary">
+                              Balance: {item.current_balance}
+                            </p>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="relative ui-table-cell">
                         <button
