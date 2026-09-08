@@ -32,6 +32,10 @@ const emptyForm: SubscriptionFormState = {
   recurrence_day: null,
   next_due_date: "",
   price: "",
+  estimated_monthly_budget: "",
+  last_top_up_date: "",
+  current_balance: "",
+  payg_top_ups: [],
   login_email: "",
   login_password: "",
   action: "Renewal",
@@ -88,6 +92,16 @@ function getInitialFormState(subscription: Subscription | null) {
     recurrence_day: subscription.recurrence_day ?? null,
     next_due_date: normalizedDate,
     price: normalizePriceValue(subscription.price || ""),
+    estimated_monthly_budget: normalizePriceValue(
+      subscription.estimated_monthly_budget || subscription.price || "",
+    ),
+    last_top_up_date: toDateInputValue(
+      subscription.last_top_up_date || subscription.due_date || "",
+    ),
+    current_balance: subscription.current_balance
+      ? normalizePriceValue(subscription.current_balance)
+      : "",
+    payg_top_ups: subscription.payg_top_ups ?? [],
     login_email: subscription.login_email || "",
     login_password: subscription.login_password || "",
     action: subscription.action || "Renewal",
@@ -113,7 +127,8 @@ export default function SubscriptionModal({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [error, setError] = useState("");
   const isFreePlan = formData.subscription === "Free";
-  const reminderPreview = !isFreePlan && formData.due_date
+  const isPaygPlan = formData.subscription === "PAYG";
+  const reminderPreview = !isFreePlan && !isPaygPlan && formData.due_date
     ? getReminderStartDate(formData.due_date, 3)
     : "";
 
@@ -141,16 +156,68 @@ export default function SubscriptionModal({
           ...current,
           subscription: value,
           action: value === "PAYG" ? "PAYG Renewal" : "Renewal",
+          billing_type: value === "PAYG" ? "monthly" : current.billing_type,
           payment_status: current.payment_status || "Pending",
           price: current.price === "$0" ? "" : current.price,
+          estimated_monthly_budget:
+            value === "PAYG"
+              ? current.estimated_monthly_budget ||
+                (current.price === "$0" ? "" : current.price)
+              : current.estimated_monthly_budget,
         };
       }
 
       return {
         ...current,
-        [name]: name === "price" ? normalizePriceValue(value) : value,
+        [name]: ["price", "estimated_monthly_budget", "current_balance"].includes(name)
+          ? value
+            ? normalizePriceValue(value)
+            : ""
+          : value,
       };
     });
+  };
+
+  const addTopUpEntry = () => {
+    setFormData((current) => ({
+      ...current,
+      payg_top_ups: [
+        ...(current.payg_top_ups ?? []),
+        {
+          id: globalThis.crypto?.randomUUID?.() ?? `topup-${Date.now()}`,
+          date: new Date().toISOString().slice(0, 10),
+          amount: "",
+        },
+      ],
+    }));
+  };
+
+  const updateTopUpEntry = (
+    id: string,
+    field: "date" | "amount",
+    value: string,
+  ) => {
+    setFormData((current) => ({
+      ...current,
+      payg_top_ups: (current.payg_top_ups ?? []).map((topUp) =>
+        topUp.id === id
+          ? {
+              ...topUp,
+              [field]:
+                field === "amount" && value ? normalizePriceValue(value) : value,
+            }
+          : topUp,
+      ),
+    }));
+  };
+
+  const removeTopUpEntry = (id: string) => {
+    setFormData((current) => ({
+      ...current,
+      payg_top_ups: (current.payg_top_ups ?? []).filter(
+        (topUp) => topUp.id !== id,
+      ),
+    }));
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -169,7 +236,17 @@ export default function SubscriptionModal({
           action: "FREE",
           payment_status: "",
         }
-      : {
+      : isPaygPlan
+        ? {
+            ...formData,
+            due_date: formData.last_top_up_date || "",
+            next_due_date: "",
+            billing_type: "monthly" as const,
+            recurrence_day: null,
+            price: formData.estimated_monthly_budget || "",
+            action: mode === "add" ? "PAYG Renewal" : formData.action,
+          }
+        : {
           ...formData,
           next_due_date: formData.due_date,
           recurrence_day:
@@ -353,6 +430,41 @@ export default function SubscriptionModal({
                   this subscription will not appear in renewal reminder emails.
                 </p>
               </div>
+            ) : isPaygPlan ? (
+              <>
+                <label className="block">
+                  <span className="mb-2 block text-label-md font-semibold text-on-surface">
+                    Last Top-up Date
+                  </span>
+                  <input
+                    name="last_top_up_date"
+                    value={formData.last_top_up_date || ""}
+                    onChange={handleChange}
+                    type="date"
+                    className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low ui-control-pad text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                  />
+                  <p className="mt-2 text-label-sm text-secondary">
+                    The most recent date funds were added.
+                  </p>
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-label-md font-semibold text-on-surface">
+                    Current Balance <span className="font-normal text-secondary">(optional)</span>
+                  </span>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-body-md text-secondary">$</span>
+                    <input
+                      name="current_balance"
+                      value={(formData.current_balance || "").replace(/^\$/, "")}
+                      onChange={handleChange}
+                      inputMode="decimal"
+                      placeholder="0.00"
+                      className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low pr-[13px] pl-[29px] text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                </label>
+              </>
             ) : (
               <>
                 <label className="block">
@@ -414,21 +526,24 @@ export default function SubscriptionModal({
 
             {!isFreePlan ? <label className="block">
               <span className="mb-2 block text-label-md font-semibold text-on-surface">
-                Price
+                {isPaygPlan ? "Estimated Monthly Budget" : "Price"}
               </span>
               <div className="relative">
                 <span className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-body-md text-secondary">
                   $
                 </span>
                 <input
-                  name="price"
-                  value={formData.price.startsWith("$") ? formData.price.slice(1) : formData.price}
+                  name={isPaygPlan ? "estimated_monthly_budget" : "price"}
+                  value={(isPaygPlan
+                    ? formData.estimated_monthly_budget || ""
+                    : formData.price
+                  ).replace(/^\$/, "")}
                   onChange={(event) =>
                     handleChange({
                       ...event,
                       target: {
                         ...event.target,
-                        name: "price",
+                        name: isPaygPlan ? "estimated_monthly_budget" : "price",
                         value: `$${event.target.value}`,
                       },
                     } as React.ChangeEvent<HTMLInputElement>)
@@ -439,6 +554,65 @@ export default function SubscriptionModal({
                 />
               </div>
             </label> : null}
+
+            {isPaygPlan ? (
+              <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-panel-pad md:col-span-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-label-md font-semibold text-on-surface">Actual Top-ups</p>
+                    <p className="mt-1 text-label-sm text-secondary">
+                      Monthly reports use the total entered here; without entries they use the estimate.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addTopUpEntry}
+                    className="rounded-lg border border-outline-variant ui-button-pad text-label-md font-semibold text-primary hover:bg-surface-container-low"
+                  >
+                    Add top-up
+                  </button>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {(formData.payg_top_ups ?? []).length === 0 ? (
+                    <p className="rounded-lg bg-surface-container-low ui-button-pad-lg text-body-md text-secondary">
+                      No actual top-ups logged yet.
+                    </p>
+                  ) : (
+                    (formData.payg_top_ups ?? []).map((topUp) => (
+                      <div key={topUp.id} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                        <input
+                          type="date"
+                          value={topUp.date}
+                          onChange={(event) => updateTopUpEntry(topUp.id, "date", event.target.value)}
+                          className="h-11 rounded-xl border border-outline-variant bg-surface-container-low ui-control-pad text-body-md outline-none focus:border-primary"
+                          required
+                        />
+                        <div className="relative">
+                          <span className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-secondary">$</span>
+                          <input
+                            value={topUp.amount.replace(/^\$/, "")}
+                            onChange={(event) => updateTopUpEntry(topUp.id, "amount", event.target.value)}
+                            inputMode="decimal"
+                            placeholder="Amount"
+                            className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low pr-[13px] pl-[29px] text-body-md outline-none focus:border-primary"
+                            required
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeTopUpEntry(topUp.id)}
+                          aria-label="Remove top-up"
+                          className="h-11 rounded-xl border border-error/20 px-3 text-error hover:bg-error-container"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">delete</span>
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : null}
 
             <label className="block">
               <span className="mb-2 block text-label-md font-semibold text-on-surface">

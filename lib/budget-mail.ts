@@ -3,6 +3,7 @@ import "server-only";
 import { buildMonthSummary, formatCurrency, getBudgetReport } from "@/lib/budget";
 import { buildBudgetReportPdf, getBudgetPdfFileName } from "@/lib/budget-pdf";
 import { query } from "@/lib/db";
+import { syncAutomaticPaymentStatuses } from "@/lib/payment-status-sync";
 import {
   normalizeSubscriptionPlan,
   type Subscription,
@@ -98,7 +99,10 @@ function formatDueDate(value: string) {
 
 function isChargeableSubscription(subscription: Subscription) {
   const amount = Number.parseFloat(
-    (subscription.price ?? "").replace(/[^0-9.]/g, ""),
+    (subscription.subscription === "PAYG"
+      ? subscription.estimated_monthly_budget || subscription.price
+      : subscription.price
+    ).replace(/[^0-9.]/g, ""),
   );
 
   return (
@@ -188,6 +192,10 @@ async function getAllSubscriptions() {
       recurrence_day,
       next_due_date,
       price,
+      estimated_monthly_budget,
+      last_top_up_date,
+      current_balance,
+      payg_top_ups,
       login_email,
       action,
       payment_status,
@@ -256,12 +264,18 @@ function buildRows(
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
                 <tr>
                   <td style="padding:0 0 10px;font-size:12px;line-height:18px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Plan</td>
-                  <td style="padding:0 0 10px;font-size:12px;line-height:18px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Due Date</td>
+                  <td style="padding:0 0 10px;font-size:12px;line-height:18px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">${item.amountSource?.startsWith("payg_") ? "Budget basis" : "Due Date"}</td>
                   <td align="right" style="padding:0 0 10px;font-size:12px;line-height:18px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Price</td>
                 </tr>
                 <tr>
                   <td style="padding:0;font-size:15px;line-height:22px;color:#475569;">${escapeHtml(item.subscription || "-")}</td>
-                  <td style="padding:0;font-size:15px;line-height:22px;color:#475569;">${escapeHtml(formatDueDate(item.dueDate))}</td>
+                  <td style="padding:0;font-size:15px;line-height:22px;color:#475569;">${escapeHtml(
+                    item.amountSource === "payg_actual"
+                      ? "Actual top-ups"
+                      : item.amountSource === "payg_estimate"
+                        ? "Estimated budget"
+                        : formatDueDate(item.dueDate),
+                  )}</td>
                   <td align="right" style="padding:0;font-size:15px;line-height:22px;color:#111827;font-weight:700;">${escapeHtml(item.price || formatCurrency(item.amount))}</td>
                 </tr>
               </table>
@@ -466,6 +480,7 @@ async function sendZohoBudgetEmail(
 }
 
 export async function sendMonthlyBudgetReport(referenceDate = new Date()) {
+  await syncAutomaticPaymentStatuses(referenceDate);
   const [subscriptions, delivery] = await Promise.all([
     getAllSubscriptions(),
     getBudgetMailDelivery(),

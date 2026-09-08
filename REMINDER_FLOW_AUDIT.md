@@ -23,10 +23,11 @@ This is the target behavior for each subscription:
 
 1. The user sets a reminder window, for example `3 days before`.
 2. The system starts sending reminders 3 days before the subscription due date.
-3. If the due date passes and the subscription is still not marked as paid, the system keeps sending one reminder per day.
-4. The daily reminders stop only when the user manually changes the subscription payment status to `Paid`.
+3. If the subscription reaches `Not Paid`, the system records when that status began.
+4. After 24 hours in `Not Paid`, the system automatically marks it `Paid`.
+5. Recurring subscriptions advance to their next billing cycle at the same time.
 
-In simple terms: the reminder should behave like a daily follow-up loop. It starts before the due date and keeps nudging until the subscription is marked as handled.
+In simple terms: the reminder gets a one-day collection window, then the subscription is treated as automatically paid without waiting for a manual update.
 
 ## Major Findings
 

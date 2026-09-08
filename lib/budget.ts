@@ -9,6 +9,7 @@ export interface BudgetLineItem {
   price: string;
   paymentStatus: string;
   billingType: Subscription["billing_type"];
+  amountSource: "fixed" | "payg_actual" | "payg_estimate";
 }
 
 export interface BudgetMonthSummary {
@@ -105,6 +106,57 @@ function getOccurrenceForMonth(
   return null;
 }
 
+function getPaygLineItem(subscription: Subscription, targetMonth: Date) {
+  if (
+    subscription.subscription !== "PAYG" ||
+    subscription.action === "Canceled"
+  ) {
+    return null;
+  }
+
+  const firstTopUpDate = [...(subscription.payg_top_ups ?? [])]
+    .map((topUp) => parseIsoDate(topUp.date))
+    .filter((date): date is Date => Boolean(date))
+    .sort((left, right) => left.getTime() - right.getTime())[0];
+  const reportingAnchor = firstTopUpDate || parseIsoDate(subscription.created_at);
+  if (
+    reportingAnchor &&
+    startOfMonth(targetMonth).getTime() < startOfMonth(reportingAnchor).getTime()
+  ) {
+    return null;
+  }
+
+  const targetKey = monthKey(targetMonth);
+  const monthlyTopUps = (subscription.payg_top_ups ?? []).filter((topUp) =>
+    topUp.date.startsWith(`${targetKey}-`),
+  );
+  const actualAmount = monthlyTopUps.reduce(
+    (sum, topUp) => sum + parsePriceAmount(topUp.amount),
+    0,
+  );
+  const hasActualTopUps = monthlyTopUps.length > 0;
+  const estimatedBudget = parsePriceAmount(
+    subscription.estimated_monthly_budget || subscription.price,
+  );
+  const latestTopUpDate = [...monthlyTopUps]
+    .sort((left, right) => right.date.localeCompare(left.date))[0]?.date;
+
+  return {
+    id: subscription.id,
+    tool: subscription.tool,
+    subscription: subscription.subscription,
+    dueDate:
+      latestTopUpDate ||
+      subscription.last_top_up_date ||
+      `${targetKey}-01`,
+    amount: hasActualTopUps ? actualAmount : estimatedBudget,
+    price: formatCurrency(hasActualTopUps ? actualAmount : estimatedBudget),
+    paymentStatus: subscription.payment_status,
+    billingType: subscription.billing_type,
+    amountSource: hasActualTopUps ? "payg_actual" : "payg_estimate",
+  } satisfies BudgetLineItem;
+}
+
 function monthKey(value: Date) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`;
 }
@@ -131,7 +183,12 @@ export function buildMonthSummary(
 ): BudgetMonthSummary {
   const month = startOfMonth(targetDate);
   const items = subscriptions
-    .map((subscription) => {
+    .map((subscription): BudgetLineItem | null => {
+      const paygItem = getPaygLineItem(subscription, month);
+      if (paygItem) {
+        return paygItem;
+      }
+
       const occurrence = getOccurrenceForMonth(subscription, month);
       if (!occurrence) {
         return null;
@@ -146,7 +203,8 @@ export function buildMonthSummary(
         price: subscription.price,
         paymentStatus: subscription.payment_status,
         billingType: subscription.billing_type,
-      } satisfies BudgetLineItem;
+        amountSource: "fixed",
+      };
     })
     .filter((item): item is BudgetLineItem => Boolean(item))
     .sort((left, right) => {

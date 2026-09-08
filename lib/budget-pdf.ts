@@ -239,7 +239,7 @@ export async function buildBudgetReportPdf(
       });
       drawText(page, bold, "TOOL", MARGIN + 10, y - 12, 8, rgb(0.34, 0.37, 0.48));
       drawText(page, bold, "PLAN", MARGIN + 176, y - 12, 8, rgb(0.34, 0.37, 0.48));
-      drawText(page, bold, "DUE DATE", MARGIN + 322, y - 12, 8, rgb(0.34, 0.37, 0.48));
+      drawText(page, bold, "DATE / BASIS", MARGIN + 322, y - 12, 8, rgb(0.34, 0.37, 0.48));
       drawText(page, bold, "PRICE", MARGIN + 445, y - 12, 8, rgb(0.34, 0.37, 0.48));
       y -= 28;
     };
@@ -266,7 +266,18 @@ export async function buildBudgetReportPdf(
 
       drawText(page, bold, fitText(item.tool, bold, 9, 154), MARGIN + 10, y - 15, 9);
       drawText(page, regular, fitText(item.subscription || "-", regular, 9, 134), MARGIN + 176, y - 15, 9);
-      drawText(page, regular, formatDate(item.dueDate), MARGIN + 322, y - 15, 9);
+      drawText(
+        page,
+        regular,
+        item.amountSource === "payg_estimate"
+          ? "Estimated"
+          : item.amountSource === "payg_actual"
+            ? "Actual top-ups"
+            : formatDate(item.dueDate),
+        MARGIN + 322,
+        y - 15,
+        9,
+      );
       drawText(page, bold, fitText(item.price || formatMoney(item.amount), bold, 9, 68), MARGIN + 445, y - 15, 9);
       page.drawLine({
         start: { x: MARGIN, y: y - 28 },

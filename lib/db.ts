@@ -70,6 +70,10 @@ export async function initDb() {
         recurrence_day INTEGER,
         next_due_date DATE,
         price TEXT,
+        estimated_monthly_budget TEXT,
+        last_top_up_date DATE,
+        current_balance TEXT,
+        payg_top_ups JSONB NOT NULL DEFAULT '[]'::jsonb,
         login_email TEXT,
         login_password TEXT,
         login_password_ciphertext TEXT,
@@ -77,6 +81,8 @@ export async function initDb() {
         login_password_tag TEXT,
         action TEXT,
         payment_status TEXT,
+        status_changed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        auto_paid_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ DEFAULT now()
       );
     `);
@@ -89,6 +95,29 @@ export async function initDb() {
         ADD COLUMN IF NOT EXISTS billing_type TEXT DEFAULT 'one_time',
         ADD COLUMN IF NOT EXISTS recurrence_day INTEGER,
         ADD COLUMN IF NOT EXISTS next_due_date DATE;
+
+      ALTER TABLE subscriptions
+        ADD COLUMN IF NOT EXISTS estimated_monthly_budget TEXT,
+        ADD COLUMN IF NOT EXISTS last_top_up_date DATE,
+        ADD COLUMN IF NOT EXISTS current_balance TEXT,
+        ADD COLUMN IF NOT EXISTS payg_top_ups JSONB NOT NULL DEFAULT '[]'::jsonb,
+        ADD COLUMN IF NOT EXISTS status_changed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        ADD COLUMN IF NOT EXISTS auto_paid_at TIMESTAMPTZ;
+    `);
+
+    await activePool.query(`
+      UPDATE subscriptions
+      SET estimated_monthly_budget = COALESCE(estimated_monthly_budget, price),
+          last_top_up_date = COALESCE(
+            last_top_up_date,
+            CASE
+              WHEN due_date ~ '^\\d{4}-\\d{2}-\\d{2}$'
+                AND to_char(to_date(due_date, 'YYYY-MM-DD'), 'YYYY-MM-DD') = due_date
+              THEN to_date(due_date, 'YYYY-MM-DD')
+              ELSE NULL
+            END
+          )
+      WHERE subscription = 'PAYG' OR action = 'PAYG Renewal';
     `);
 
     await activePool.query(`
