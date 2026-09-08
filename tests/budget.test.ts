@@ -53,3 +53,16 @@ test("canceled PAYG subscriptions are omitted", () => {
   assert.equal(report.total, 0);
   assert.equal(report.items.length, 0);
 });
+
+test("PAYG normalizes database Date values before sorting budget items", () => {
+  const report = buildMonthSummary(
+    [
+      makePayg({
+        last_top_up_date: new Date("2026-09-12T00:00:00.000Z") as unknown as string,
+      }),
+    ],
+    new Date(2026, 8, 1),
+  );
+
+  assert.equal(report.items[0]?.dueDate, "2026-09-12");
+});

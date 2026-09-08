@@ -40,12 +40,21 @@ function addMonths(value: Date, count: number) {
   return new Date(value.getFullYear(), value.getMonth() + count, 1);
 }
 
-function parseIsoDate(value: string | null | undefined) {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+function toDateInput(value: unknown) {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? "" : value.toISOString().slice(0, 10);
+  }
+
+  return typeof value === "string" ? value.slice(0, 10) : "";
+}
+
+function parseIsoDate(value: unknown) {
+  const dateInput = toDateInput(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
     return null;
   }
 
-  const parsed = new Date(`${value}T00:00:00`);
+  const parsed = new Date(`${dateInput}T00:00:00`);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
@@ -139,15 +148,20 @@ function getPaygLineItem(subscription: Subscription, targetMonth: Date) {
     subscription.estimated_monthly_budget || subscription.price,
   );
   const latestTopUpDate = [...monthlyTopUps]
-    .sort((left, right) => right.date.localeCompare(left.date))[0]?.date;
+    .sort(
+      (left, right) =>
+        toDateInput(right.date).localeCompare(toDateInput(left.date)),
+    )[0]?.date;
+  const normalizedLatestTopUpDate = toDateInput(latestTopUpDate);
+  const normalizedLastTopUpDate = toDateInput(subscription.last_top_up_date);
 
   return {
     id: subscription.id,
     tool: subscription.tool,
     subscription: subscription.subscription,
     dueDate:
-      latestTopUpDate ||
-      subscription.last_top_up_date ||
+      normalizedLatestTopUpDate ||
+      normalizedLastTopUpDate ||
       `${targetKey}-01`,
     amount: hasActualTopUps ? actualAmount : estimatedBudget,
     price: formatCurrency(hasActualTopUps ? actualAmount : estimatedBudget),
