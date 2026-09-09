@@ -36,6 +36,11 @@ const emptyForm: SubscriptionFormState = {
   last_top_up_date: "",
   current_balance: "",
   payg_top_ups: [],
+  estimated_monthly_bill: "",
+  statement_generation_date: "",
+  bill_status: "Pending Invoice",
+  bill_status_month: new Date().toISOString().slice(0, 7),
+  postpaid_bills: [],
   login_email: "",
   login_password: "",
   action: "Renewal",
@@ -102,6 +107,16 @@ function getInitialFormState(subscription: Subscription | null) {
       ? normalizePriceValue(subscription.current_balance)
       : "",
     payg_top_ups: subscription.payg_top_ups ?? [],
+    estimated_monthly_bill: normalizePriceValue(
+      subscription.estimated_monthly_bill || subscription.price || "",
+    ),
+    statement_generation_date: toDateInputValue(
+      subscription.statement_generation_date || subscription.due_date || "",
+    ),
+    bill_status: subscription.bill_status || "Pending Invoice",
+    bill_status_month:
+      subscription.bill_status_month || new Date().toISOString().slice(0, 7),
+    postpaid_bills: subscription.postpaid_bills ?? [],
     login_email: subscription.login_email || "",
     login_password: subscription.login_password || "",
     action: subscription.action || "Renewal",
@@ -128,7 +143,9 @@ export default function SubscriptionModal({
   const [error, setError] = useState("");
   const isFreePlan = formData.subscription === "Free";
   const isPaygPlan = formData.subscription === "PAYG";
-  const reminderPreview = !isFreePlan && !isPaygPlan && formData.due_date
+  const isPostpaidPlan = formData.subscription === "PAYG (Postpaid)";
+  const reminderPreview =
+    !isFreePlan && !isPaygPlan && !isPostpaidPlan && formData.due_date
     ? getReminderStartDate(formData.due_date, 3)
     : "";
 
@@ -156,7 +173,10 @@ export default function SubscriptionModal({
           ...current,
           subscription: value,
           action: value === "PAYG" ? "PAYG Renewal" : "Renewal",
-          billing_type: value === "PAYG" ? "monthly" : current.billing_type,
+          billing_type:
+            value === "PAYG" || value === "PAYG (Postpaid)"
+              ? "monthly"
+              : current.billing_type,
           payment_status: current.payment_status || "Pending",
           price: current.price === "$0" ? "" : current.price,
           estimated_monthly_budget:
@@ -164,12 +184,26 @@ export default function SubscriptionModal({
               ? current.estimated_monthly_budget ||
                 (current.price === "$0" ? "" : current.price)
               : current.estimated_monthly_budget,
+          estimated_monthly_bill:
+            value === "PAYG (Postpaid)"
+              ? current.estimated_monthly_bill ||
+                (current.price === "$0" ? "" : current.price)
+              : current.estimated_monthly_bill,
+          bill_status:
+            value === "PAYG (Postpaid)"
+              ? current.bill_status || "Pending Invoice"
+              : current.bill_status,
         };
       }
 
       return {
         ...current,
-        [name]: ["price", "estimated_monthly_budget", "current_balance"].includes(name)
+        [name]: [
+          "price",
+          "estimated_monthly_budget",
+          "estimated_monthly_bill",
+          "current_balance",
+        ].includes(name)
           ? value
             ? normalizePriceValue(value)
             : ""
@@ -220,6 +254,48 @@ export default function SubscriptionModal({
     }));
   };
 
+  const addPostpaidBill = () => {
+    setFormData((current) => ({
+      ...current,
+      postpaid_bills: [
+        ...(current.postpaid_bills ?? []),
+        {
+          id: globalThis.crypto?.randomUUID?.() ?? `bill-${Date.now()}`,
+          month: new Date().toISOString().slice(0, 7),
+          amount: "",
+        },
+      ],
+    }));
+  };
+
+  const updatePostpaidBill = (
+    id: string,
+    field: "month" | "amount",
+    value: string,
+  ) => {
+    setFormData((current) => ({
+      ...current,
+      postpaid_bills: (current.postpaid_bills ?? []).map((bill) =>
+        bill.id === id
+          ? {
+              ...bill,
+              [field]:
+                field === "amount" && value ? normalizePriceValue(value) : value,
+            }
+          : bill,
+      ),
+    }));
+  };
+
+  const removePostpaidBill = (id: string) => {
+    setFormData((current) => ({
+      ...current,
+      postpaid_bills: (current.postpaid_bills ?? []).filter(
+        (bill) => bill.id !== id,
+      ),
+    }));
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setIsSaving(true);
@@ -246,6 +322,22 @@ export default function SubscriptionModal({
             price: formData.estimated_monthly_budget || "",
             action: mode === "add" ? "PAYG Renewal" : formData.action,
           }
+        : isPostpaidPlan
+          ? {
+              ...formData,
+              due_date: formData.statement_generation_date || "",
+              next_due_date: formData.statement_generation_date || "",
+              billing_type: "monthly" as const,
+              recurrence_day: formData.statement_generation_date
+                ? Number.parseInt(
+                    formData.statement_generation_date.slice(8, 10),
+                    10,
+                  )
+                : null,
+              price: formData.estimated_monthly_bill || "",
+              action: "Renewal",
+              payment_status: "Paid",
+            }
         : {
           ...formData,
           next_due_date: formData.due_date,
@@ -465,6 +557,43 @@ export default function SubscriptionModal({
                   </div>
                 </label>
               </>
+            ) : isPostpaidPlan ? (
+              <>
+                <label className="block">
+                  <span className="mb-2 block text-label-md font-semibold text-on-surface">
+                    Statement Generation Date
+                  </span>
+                  <input
+                    name="statement_generation_date"
+                    value={formData.statement_generation_date || ""}
+                    onChange={handleChange}
+                    type="date"
+                    required
+                    className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low ui-control-pad text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                  />
+                  <p className="mt-2 text-label-sm text-secondary">
+                    Choose the usual day of the month when the statement arrives.
+                  </p>
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-label-md font-semibold text-on-surface">
+                    Bill Status
+                  </span>
+                  <select
+                    name="bill_status"
+                    value={formData.bill_status || "Pending Invoice"}
+                    onChange={handleChange}
+                    className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low ui-control-pad text-body-md outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="Pending Invoice">Pending Invoice</option>
+                    <option value="Settled">Settled</option>
+                  </select>
+                  <p className="mt-2 text-label-sm text-secondary">
+                    Resets to Pending Invoice at the start of each month.
+                  </p>
+                </label>
+              </>
             ) : (
               <>
                 <label className="block">
@@ -526,24 +655,41 @@ export default function SubscriptionModal({
 
             {!isFreePlan ? <label className="block">
               <span className="mb-2 block text-label-md font-semibold text-on-surface">
-                {isPaygPlan ? "Estimated Monthly Budget" : "Price"}
+                {isPaygPlan
+                  ? "Estimated Monthly Budget"
+                  : isPostpaidPlan
+                    ? "Estimated Monthly Bill"
+                    : "Price"}
               </span>
               <div className="relative">
                 <span className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-body-md text-secondary">
                   $
                 </span>
                 <input
-                  name={isPaygPlan ? "estimated_monthly_budget" : "price"}
-                  value={(isPaygPlan
-                    ? formData.estimated_monthly_budget || ""
-                    : formData.price
+                  name={
+                    isPaygPlan
+                      ? "estimated_monthly_budget"
+                      : isPostpaidPlan
+                        ? "estimated_monthly_bill"
+                        : "price"
+                  }
+                  value={(
+                    isPaygPlan
+                      ? formData.estimated_monthly_budget || ""
+                      : isPostpaidPlan
+                        ? formData.estimated_monthly_bill || ""
+                        : formData.price
                   ).replace(/^\$/, "")}
                   onChange={(event) =>
                     handleChange({
                       ...event,
                       target: {
                         ...event.target,
-                        name: isPaygPlan ? "estimated_monthly_budget" : "price",
+                        name: isPaygPlan
+                          ? "estimated_monthly_budget"
+                          : isPostpaidPlan
+                            ? "estimated_monthly_bill"
+                            : "price",
                         value: `$${event.target.value}`,
                       },
                     } as React.ChangeEvent<HTMLInputElement>)
@@ -614,6 +760,67 @@ export default function SubscriptionModal({
               </div>
             ) : null}
 
+            {isPostpaidPlan ? (
+              <div className="rounded-xl border border-outline-variant bg-surface-container-lowest ui-panel-pad md:col-span-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-label-md font-semibold text-on-surface">
+                      Actual Statement Amounts
+                    </p>
+                    <p className="mt-1 text-label-sm text-secondary">
+                      Add each monthly invoice. The current month uses its actual amount; otherwise the report forecasts from the latest three bills.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addPostpaidBill}
+                    className="rounded-lg border border-outline-variant ui-button-pad text-label-md font-semibold text-primary hover:bg-surface-container-low"
+                  >
+                    Add bill
+                  </button>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {(formData.postpaid_bills ?? []).length === 0 ? (
+                    <p className="rounded-lg bg-surface-container-low ui-button-pad-lg text-body-md text-secondary">
+                      No statement history logged yet. The estimate will be used until bill history is available.
+                    </p>
+                  ) : (
+                    (formData.postpaid_bills ?? []).map((bill) => (
+                      <div key={bill.id} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                        <input
+                          type="month"
+                          value={bill.month}
+                          onChange={(event) => updatePostpaidBill(bill.id, "month", event.target.value)}
+                          className="h-11 rounded-xl border border-outline-variant bg-surface-container-low ui-control-pad text-body-md outline-none focus:border-primary"
+                          required
+                        />
+                        <div className="relative">
+                          <span className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-secondary">$</span>
+                          <input
+                            value={bill.amount.replace(/^\$/, "")}
+                            onChange={(event) => updatePostpaidBill(bill.id, "amount", event.target.value)}
+                            inputMode="decimal"
+                            placeholder="Invoice amount"
+                            className="h-11 w-full rounded-xl border border-outline-variant bg-surface-container-low pr-[13px] pl-[29px] text-body-md outline-none focus:border-primary"
+                            required
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removePostpaidBill(bill.id)}
+                          aria-label="Remove bill"
+                          className="h-11 rounded-xl border border-error/20 px-3 text-error hover:bg-error-container"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">delete</span>
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : null}
+
             <label className="block">
               <span className="mb-2 block text-label-md font-semibold text-on-surface">
                 Login Email
@@ -657,7 +864,7 @@ export default function SubscriptionModal({
               </div>
             </label>
 
-            {!isFreePlan ? <label className="block">
+            {!isFreePlan && !isPostpaidPlan ? <label className="block">
               <span className="mb-2 block text-label-md font-semibold text-on-surface">
                 Action
               </span>
@@ -674,7 +881,7 @@ export default function SubscriptionModal({
               </select>
             </label> : null}
 
-            {!isFreePlan ? <label className="block">
+            {!isFreePlan && !isPostpaidPlan ? <label className="block">
               <span className="mb-2 block text-label-md font-semibold text-on-surface">
                 Payment Status
               </span>

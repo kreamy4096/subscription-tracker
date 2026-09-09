@@ -273,6 +273,12 @@ export async function buildBudgetReportPdf(
           ? "Estimated"
           : item.amountSource === "payg_actual"
             ? "Actual top-ups"
+            : item.amountSource === "postpaid_actual"
+              ? "Actual invoice"
+              : item.amountSource === "postpaid_average"
+                ? "3-month average"
+                : item.amountSource === "postpaid_estimate"
+                  ? "Estimated bill"
             : formatDate(item.dueDate),
         MARGIN + 322,
         y - 15,

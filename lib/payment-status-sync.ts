@@ -83,7 +83,7 @@ export async function syncAutomaticPaymentStatuses(now = new Date()) {
       continue;
     }
 
-    if (row.subscription === "PAYG") {
+    if (row.subscription === "PAYG" || row.subscription === "PAYG (Postpaid)") {
       continue;
     }
 

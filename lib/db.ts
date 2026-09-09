@@ -74,6 +74,11 @@ export async function initDb() {
         last_top_up_date DATE,
         current_balance TEXT,
         payg_top_ups JSONB NOT NULL DEFAULT '[]'::jsonb,
+        estimated_monthly_bill TEXT,
+        statement_generation_date DATE,
+        bill_status TEXT,
+        bill_status_month TEXT,
+        postpaid_bills JSONB NOT NULL DEFAULT '[]'::jsonb,
         login_email TEXT,
         login_password TEXT,
         login_password_ciphertext TEXT,
@@ -103,6 +108,13 @@ export async function initDb() {
         ADD COLUMN IF NOT EXISTS payg_top_ups JSONB NOT NULL DEFAULT '[]'::jsonb,
         ADD COLUMN IF NOT EXISTS status_changed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
         ADD COLUMN IF NOT EXISTS auto_paid_at TIMESTAMPTZ;
+
+      ALTER TABLE subscriptions
+        ADD COLUMN IF NOT EXISTS estimated_monthly_bill TEXT,
+        ADD COLUMN IF NOT EXISTS statement_generation_date DATE,
+        ADD COLUMN IF NOT EXISTS bill_status TEXT,
+        ADD COLUMN IF NOT EXISTS bill_status_month TEXT,
+        ADD COLUMN IF NOT EXISTS postpaid_bills JSONB NOT NULL DEFAULT '[]'::jsonb;
     `);
 
     await activePool.query(`
@@ -118,6 +130,12 @@ export async function initDb() {
             END
           )
       WHERE subscription = 'PAYG' OR action = 'PAYG Renewal';
+    `);
+
+    await activePool.query(`
+      UPDATE subscriptions
+      SET subscription = 'Paid'
+      WHERE subscription IN ('Pro(The Zone)', 'Pro (The Zone)');
     `);
 
     await activePool.query(`
@@ -330,8 +348,14 @@ export async function initDb() {
       CREATE TABLE IF NOT EXISTS budget_mail_settings (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         enabled BOOLEAN DEFAULT true,
+        send_day INTEGER NOT NULL DEFAULT 1,
         updated_at TIMESTAMPTZ DEFAULT now()
       );
+    `);
+
+    await activePool.query(`
+      ALTER TABLE budget_mail_settings
+        ADD COLUMN IF NOT EXISTS send_day INTEGER NOT NULL DEFAULT 1;
     `);
 
     await activePool.query(`

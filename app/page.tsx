@@ -98,6 +98,17 @@ function normalizeSubscription(
         : ""),
     current_balance: item.current_balance ?? "",
     payg_top_ups: item.payg_top_ups ?? [],
+    estimated_monthly_bill: item.estimated_monthly_bill ??
+      (normalizeSubscriptionPlan(item.subscription, item.action) === "PAYG (Postpaid)"
+        ? item.price ?? ""
+        : ""),
+    statement_generation_date: item.statement_generation_date ??
+      (normalizeSubscriptionPlan(item.subscription, item.action) === "PAYG (Postpaid)"
+        ? item.due_date ?? ""
+        : ""),
+    bill_status: item.bill_status === "Settled" ? "Settled" : "Pending Invoice",
+    bill_status_month: item.bill_status_month ?? "",
+    postpaid_bills: item.postpaid_bills ?? [],
     login_email: item.login_email ?? "",
     login_password: item.login_password ?? "",
     has_login_password:
@@ -333,6 +344,10 @@ export default function Home() {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [postpaidAlert, setPostpaidAlert] = useState<{
+    active: boolean;
+    pending: Array<{ id: string; tool: string }>;
+  } | null>(null);
   const credentialsPopoverRef = useRef<HTMLDivElement | null>(null);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -403,6 +418,28 @@ export default function Home() {
       window.clearTimeout(initialLoad);
     };
   }, [loadSubscriptions]);
+
+  useEffect(() => {
+    const loadPostpaidAlert = async () => {
+      try {
+        const response = await fetch("/api/postpaid-reminders/status", {
+          cache: "no-store",
+        });
+        if (response.ok) {
+          setPostpaidAlert(await response.json());
+        }
+      } catch (alertError) {
+        console.error("Failed to load postpaid reminder status:", alertError);
+      }
+    };
+
+    void loadPostpaidAlert();
+    const alertRefresh = window.setInterval(() => {
+      void loadPostpaidAlert();
+    }, 5 * 60 * 1000);
+
+    return () => window.clearInterval(alertRefresh);
+  }, [subscriptions]);
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -1029,6 +1066,22 @@ export default function Home() {
           </div>
         ) : null}
 
+        {postpaidAlert?.active ? (
+          <div className="mb-6 rounded-xl border border-warning bg-warning/10 ui-card-pad text-on-surface shadow-sm">
+            <div className="flex items-start gap-3">
+              <span className="material-symbols-outlined text-warning">warning</span>
+              <div>
+                <p className="text-title-lg font-semibold">
+                  Action Required: Update your Postpaid Bills
+                </p>
+                <p className="mt-1 text-body-md text-on-surface-variant">
+                  Your monthly budget email sends in three days. Add actual invoice amounts for: {postpaidAlert.pending.map((item) => item.tool).join(", ")}.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <nav className="mb-gutter flex gap-2 overflow-x-auto lg:hidden">
           {navItems.map((item) => (
             <button
@@ -1390,7 +1443,7 @@ export default function Home() {
                   Send Monthly Report
                 </p>
                 <h3 className="mt-1 text-title-lg font-semibold text-on-surface">
-                  First day of every month
+                  On your scheduled monthly date
                 </h3>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button
@@ -1479,6 +1532,12 @@ export default function Home() {
                                 ? "Actual top-ups"
                                 : item.amountSource === "payg_estimate"
                                   ? "Estimated budget"
+                                  : item.amountSource === "postpaid_actual"
+                                    ? "Actual invoice"
+                                    : item.amountSource === "postpaid_average"
+                                      ? "3-month average"
+                                      : item.amountSource === "postpaid_estimate"
+                                        ? "Estimated bill"
                                   : formatDueDate(item.dueDate)}
                             </td>
                             <td className="ui-table-cell text-body-md font-semibold text-on-surface">
@@ -1536,6 +1595,12 @@ export default function Home() {
                                 ? "Actual top-ups"
                                 : item.amountSource === "payg_estimate"
                                   ? "Estimated budget"
+                                  : item.amountSource === "postpaid_actual"
+                                    ? "Actual invoice"
+                                    : item.amountSource === "postpaid_average"
+                                      ? "3-month average"
+                                      : item.amountSource === "postpaid_estimate"
+                                        ? "Estimated bill"
                                   : formatDueDate(item.dueDate)}
                             </td>
                             <td className="ui-table-cell text-body-md font-semibold text-on-surface">
@@ -1665,6 +1730,8 @@ export default function Home() {
                         {formatDueDate(
                           item.subscription === "PAYG"
                             ? item.last_top_up_date || item.due_date
+                            : item.subscription === "PAYG (Postpaid)"
+                              ? item.statement_generation_date || item.due_date
                             : item.due_date,
                         )}
                       </td>
@@ -1672,10 +1739,17 @@ export default function Home() {
                         <div>
                           {item.subscription === "PAYG"
                             ? item.estimated_monthly_budget || item.price || "-"
+                            : item.subscription === "PAYG (Postpaid)"
+                              ? item.estimated_monthly_bill || item.price || "-"
                             : item.price || "-"}
                           {item.subscription === "PAYG" && item.current_balance ? (
                             <p className="mt-1 text-label-sm font-normal text-secondary">
                               Balance: {item.current_balance}
+                            </p>
+                          ) : null}
+                          {item.subscription === "PAYG (Postpaid)" ? (
+                            <p className="mt-1 text-label-sm font-normal text-secondary">
+                              Bill: {item.bill_status || "Pending Invoice"}
                             </p>
                           ) : null}
                         </div>

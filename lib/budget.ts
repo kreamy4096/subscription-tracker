@@ -9,7 +9,13 @@ export interface BudgetLineItem {
   price: string;
   paymentStatus: string;
   billingType: Subscription["billing_type"];
-  amountSource: "fixed" | "payg_actual" | "payg_estimate";
+  amountSource:
+    | "fixed"
+    | "payg_actual"
+    | "payg_estimate"
+    | "postpaid_actual"
+    | "postpaid_average"
+    | "postpaid_estimate";
 }
 
 export interface BudgetMonthSummary {
@@ -171,6 +177,59 @@ function getPaygLineItem(subscription: Subscription, targetMonth: Date) {
   } satisfies BudgetLineItem;
 }
 
+function getPostpaidLineItem(subscription: Subscription, targetMonth: Date) {
+  if (
+    subscription.subscription !== "PAYG (Postpaid)" ||
+    subscription.action === "Canceled"
+  ) {
+    return null;
+  }
+
+  const targetKey = monthKey(targetMonth);
+  const currentBill = (subscription.postpaid_bills ?? []).find(
+    (bill) => bill.month === targetKey,
+  );
+  const historicalBills = (subscription.postpaid_bills ?? [])
+    .filter((bill) => bill.month < targetKey)
+    .sort((left, right) => right.month.localeCompare(left.month))
+    .slice(0, 3);
+  const historicalAverage = historicalBills.length
+    ? historicalBills.reduce(
+        (sum, bill) => sum + parsePriceAmount(bill.amount),
+        0,
+      ) / historicalBills.length
+    : null;
+  const estimatedBill = parsePriceAmount(
+    subscription.estimated_monthly_bill || subscription.price,
+  );
+  const amount = currentBill
+    ? parsePriceAmount(currentBill.amount)
+    : historicalAverage ?? estimatedBill;
+  const statementDay =
+    parseIsoDate(subscription.statement_generation_date)?.getDate() ?? 1;
+  const statementDate = buildOccurrenceDate(
+    targetMonth.getFullYear(),
+    targetMonth.getMonth(),
+    statementDay,
+  );
+
+  return {
+    id: subscription.id,
+    tool: subscription.tool,
+    subscription: subscription.subscription,
+    dueDate: statementDate.toISOString().slice(0, 10),
+    amount,
+    price: formatCurrency(amount),
+    paymentStatus: subscription.bill_status || "Pending Invoice",
+    billingType: "monthly",
+    amountSource: currentBill
+      ? "postpaid_actual"
+      : historicalAverage !== null
+        ? "postpaid_average"
+        : "postpaid_estimate",
+  } satisfies BudgetLineItem;
+}
+
 function monthKey(value: Date) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`;
 }
@@ -198,6 +257,11 @@ export function buildMonthSummary(
   const month = startOfMonth(targetDate);
   const items = subscriptions
     .map((subscription): BudgetLineItem | null => {
+      const postpaidItem = getPostpaidLineItem(subscription, month);
+      if (postpaidItem) {
+        return postpaidItem;
+      }
+
       const paygItem = getPaygLineItem(subscription, month);
       if (paygItem) {
         return paygItem;

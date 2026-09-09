@@ -5,7 +5,7 @@ import { getPool, query } from "@/lib/db";
 
 async function getBudgetSettingsPayload() {
   const settingsResult = await query(
-    `SELECT id, enabled, updated_at
+    `SELECT id, enabled, send_day, updated_at
      FROM budget_mail_settings
      ORDER BY updated_at ASC
      LIMIT 1`,
@@ -67,12 +67,12 @@ export async function POST(request: Request) {
       await client.query("BEGIN");
       const settingsResult = await client.query(
         `UPDATE budget_mail_settings
-         SET enabled = $1, updated_at = now()
+         SET enabled = $1, send_day = $2, updated_at = now()
          WHERE id = (
            SELECT id FROM budget_mail_settings ORDER BY updated_at ASC LIMIT 1
          )
          RETURNING id`,
-        [parsed.data.enabled],
+        [parsed.data.enabled, parsed.data.send_day],
       );
       const settingsId = settingsResult.rows[0]?.id as string | undefined;
 
