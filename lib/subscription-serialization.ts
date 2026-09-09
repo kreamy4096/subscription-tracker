@@ -7,11 +7,12 @@ import {
 
 type SubscriptionRow = Omit<
   Partial<Subscription>,
-  "next_due_date" | "last_top_up_date"
+  "next_due_date" | "last_top_up_date" | "statement_generation_date"
 > & {
   id: string;
   next_due_date?: string | Date | null;
   last_top_up_date?: string | Date | null;
+  statement_generation_date?: string | Date | null;
   login_password_ciphertext?: string | null;
   login_password_iv?: string | null;
   login_password_tag?: string | null;
@@ -26,6 +27,10 @@ export function serializeSubscriptionRow(row: SubscriptionRow): Subscription {
     row.last_top_up_date instanceof Date
       ? row.last_top_up_date.toISOString().slice(0, 10)
       : row.last_top_up_date;
+  const statementGenerationDate =
+    row.statement_generation_date instanceof Date
+      ? row.statement_generation_date.toISOString().slice(0, 10)
+      : row.statement_generation_date;
 
   return {
     id: row.id,
@@ -47,6 +52,17 @@ export function serializeSubscriptionRow(row: SubscriptionRow): Subscription {
         : ""),
     current_balance: row.current_balance ?? "",
     payg_top_ups: Array.isArray(row.payg_top_ups) ? row.payg_top_ups : [],
+    estimated_monthly_bill: row.estimated_monthly_bill ??
+      (normalizeSubscriptionPlan(row.subscription, row.action) === "PAYG (Postpaid)"
+        ? row.price ?? ""
+        : ""),
+    statement_generation_date: statementGenerationDate ??
+      (normalizeSubscriptionPlan(row.subscription, row.action) === "PAYG (Postpaid)"
+        ? row.due_date ?? ""
+        : ""),
+    bill_status: row.bill_status === "Settled" ? "Settled" : "Pending Invoice",
+    bill_status_month: row.bill_status_month ?? "",
+    postpaid_bills: Array.isArray(row.postpaid_bills) ? row.postpaid_bills : [],
     login_email: row.login_email ?? "",
     login_password: decryptPasswordSafely(row),
     has_login_password:

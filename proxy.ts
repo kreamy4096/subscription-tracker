@@ -92,7 +92,11 @@ export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   if (
-    pathname === "/api/reminders/send" &&
+    [
+      "/api/reminders/send",
+      "/api/budget/send",
+      "/api/postpaid-reminders/send",
+    ].includes(pathname) &&
     cronSecrets.some((cronSecret) => authorization === `Bearer ${cronSecret}`)
   ) {
     return NextResponse.next();

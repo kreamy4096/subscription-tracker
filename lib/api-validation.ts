@@ -1,7 +1,11 @@
 import "server-only";
 
 import { isValidDateInput } from "@/lib/subscription-dates";
-import { subscriptionPlanOptions, type PaygTopUp } from "@/lib/subscription-types";
+import {
+  subscriptionPlanOptions,
+  type PaygTopUp,
+  type PostpaidBill,
+} from "@/lib/subscription-types";
 
 export interface SubscriptionInput {
   tool: string;
@@ -15,6 +19,11 @@ export interface SubscriptionInput {
   last_top_up_date: string;
   current_balance: string;
   payg_top_ups: PaygTopUp[];
+  estimated_monthly_bill: string;
+  statement_generation_date: string;
+  bill_status: "Pending Invoice" | "Settled";
+  bill_status_month: string;
+  postpaid_bills: PostpaidBill[];
   login_email: string;
   login_password: string;
   action: string;
@@ -27,6 +36,7 @@ export interface ReminderSettingsInput {
 
 export interface BudgetMailSettingsInput {
   enabled: boolean;
+  send_day: number;
   recipients: ReminderRecipientInput[];
 }
 
@@ -102,6 +112,22 @@ export function parseSubscriptionInput(value: unknown) {
           };
         })
       : [],
+    estimated_monthly_bill: cleanString(input.estimated_monthly_bill, 40),
+    statement_generation_date: cleanString(input.statement_generation_date, 10),
+    bill_status: input.bill_status === "Settled" ? "Settled" : "Pending Invoice",
+    bill_status_month: cleanString(input.bill_status_month, 7),
+    postpaid_bills: Array.isArray(input.postpaid_bills)
+      ? input.postpaid_bills.map((value, index) => {
+          const bill = value && typeof value === "object"
+            ? (value as Record<string, unknown>)
+            : {};
+          return {
+            id: cleanString(bill.id, 80) || `bill-${index}`,
+            month: cleanString(bill.month, 7),
+            amount: cleanString(bill.amount, 40),
+          };
+        })
+      : [],
     login_email: cleanString(input.login_email, 254),
     login_password: cleanString(input.login_password, 512),
     action: cleanString(input.action, 40),
@@ -128,6 +154,51 @@ export function parseSubscriptionInput(value: unknown) {
     parsed.last_top_up_date = "";
     parsed.current_balance = "";
     parsed.payg_top_ups = [];
+    parsed.estimated_monthly_bill = "";
+    parsed.statement_generation_date = "";
+    parsed.bill_status = "Pending Invoice";
+    parsed.bill_status_month = "";
+    parsed.postpaid_bills = [];
+  }
+
+  if (parsed.subscription === "PAYG (Postpaid)") {
+    parsed.estimated_monthly_bill = parsed.estimated_monthly_bill || parsed.price;
+    parsed.price = parsed.estimated_monthly_bill;
+    parsed.statement_generation_date =
+      parsed.statement_generation_date || parsed.due_date;
+    parsed.due_date = parsed.statement_generation_date;
+    parsed.next_due_date = parsed.statement_generation_date;
+    parsed.billing_type = "monthly";
+    parsed.recurrence_day = parsed.statement_generation_date
+      ? Number.parseInt(parsed.statement_generation_date.slice(8, 10), 10)
+      : null;
+    parsed.action = "Renewal";
+    parsed.payment_status = "Paid";
+    parsed.bill_status_month = parsed.bill_status_month || new Date().toISOString().slice(0, 7);
+
+    const estimate = Number.parseFloat(
+      parsed.estimated_monthly_bill.replace(/[^0-9.]/g, ""),
+    );
+    if (!Number.isFinite(estimate) || estimate <= 0) {
+      return { error: "Estimated monthly bill must be greater than zero" };
+    }
+    if (!isValidDateInput(parsed.statement_generation_date)) {
+      return { error: "Statement generation date is required" };
+    }
+    const billMonths = new Set<string>();
+    for (const bill of parsed.postpaid_bills) {
+      if (!/^\d{4}-\d{2}$/.test(bill.month)) {
+        return { error: "Each postpaid bill needs a valid billing month" };
+      }
+      if (billMonths.has(bill.month)) {
+        return { error: "Only one postpaid bill can be logged per month" };
+      }
+      billMonths.add(bill.month);
+      const amount = Number.parseFloat(bill.amount.replace(/[^0-9.]/g, ""));
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return { error: "Each postpaid bill amount must be greater than zero" };
+      }
+    }
   }
 
   if (parsed.subscription === "PAYG") {
@@ -253,6 +324,10 @@ export function parseBudgetMailSettingsInput(value: unknown) {
   }
 
   const enabled = input.enabled === true;
+  const sendDay = Number.parseInt(String(input.send_day ?? "1"), 10);
+  if (!Number.isInteger(sendDay) || sendDay < 1 || sendDay > 28) {
+    return { error: "Monthly budget email day must be between 1 and 28" };
+  }
   const activeRecipients = recipients.filter((recipient) => recipient.is_active);
   if (enabled && activeRecipients.length === 0) {
     return { error: "Enabled budget reports need at least one active email" };
@@ -276,6 +351,7 @@ export function parseBudgetMailSettingsInput(value: unknown) {
   return {
     data: {
       enabled,
+      send_day: sendDay,
       recipients: normalizedRecipients,
     } satisfies BudgetMailSettingsInput,
   };

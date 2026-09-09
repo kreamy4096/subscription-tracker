@@ -6,6 +6,8 @@ SubTrack Pro is a Next.js subscription management app with:
 - PostgreSQL-backed subscription and reminder settings APIs
 - Zoho Mail reminder sending via OAuth2 REST API
 - a daily reminder cron job plus a manual reminder trigger route
+- prepaid PAYG top-up tracking and postpaid PAYG invoice forecasting
+- configurable monthly budget delivery with three-day postpaid invoice reminders
 
 ## Local Development
 
@@ -73,7 +75,11 @@ or:
 
 where `N` is the number of due subscriptions included in the reminder email.
 
-The included `vercel.json` runs `/api/reminders/send` at `0 7 * * *`, which is 8:00 AM in Africa/Lagos.
+The included `vercel.json` runs the renewal, conditional monthly-budget, and
+postpaid-invoice checks daily at `0 7 * * *`, which is 8:00 AM in Africa/Lagos.
+The budget report sends only on the configured monthly day. Three days before
+that date, pending postpaid invoices trigger an action-required email and
+dashboard alert.
 
 ## Notes
 

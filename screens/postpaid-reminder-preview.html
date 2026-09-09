@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SubTrack Pro — Postpaid Reminder Preview</title>
+  <style>
+    *{box-sizing:border-box} body{margin:0;background:#eef3f8;color:#17222f;font-family:Inter,Arial,sans-serif}.page{max-width:1180px;margin:0 auto;padding:42px 26px 80px}.eyebrow{font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#617286}.preview-title{margin:8px 0 28px;font-size:28px}.dashboard{overflow:hidden;border:1px solid #d9e2ec;border-radius:22px;background:#f8fafc;box-shadow:0 24px 65px rgba(30,55,78,.12)}.dashboard-head{display:flex;justify-content:space-between;align-items:center;padding:24px 30px;border-bottom:1px solid #e3e9f0;background:white}.brand{font-size:22px;font-weight:850;color:#164a7b}.dashboard-body{padding:28px}.banner{display:flex;gap:16px;align-items:flex-start;padding:20px 22px;border:1px solid #f59e0b;border-radius:15px;background:#fff8e8;box-shadow:0 7px 20px rgba(180,106,0,.08)}.warn-icon{display:grid;place-items:center;flex:0 0 42px;height:42px;border-radius:12px;background:#f59e0b;color:white;font-size:24px;font-weight:900}.banner h2{margin:0;font-size:20px;color:#7c3b00}.banner p{margin:7px 0 0;line-height:1.55;color:#6b4a24}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:24px}.card{height:110px;border:1px solid #e1e8ef;border-radius:14px;background:white;padding:18px}.card span{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:#6f8090}.card strong{display:block;margin-top:12px;font-size:25px}.section-label{margin:44px 0 18px}.mail-stage{padding:34px;background:#fff7ed;border-radius:22px}.mail{max-width:680px;margin:0 auto;overflow:hidden;border:1px solid #fed7aa;border-radius:16px;background:white;box-shadow:0 20px 55px rgba(124,45,18,.12)}.mail-top{padding:29px 32px;background:linear-gradient(135deg,#9a3412,#ea580c);color:white}.mail-top .mail-brand{font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#ffedd5}.mail-top h1{margin:10px 0 9px;font-size:29px;line-height:1.2}.mail-top p{margin:0;color:#ffedd5;line-height:1.55}.mail-body{padding:28px 32px}.mail-body p{margin:0 0 18px;line-height:1.65;color:#4b5563}.item{display:flex;justify-content:space-between;align-items:center;margin:10px 0;padding:15px 16px;border:1px solid #fed7aa;border-radius:11px;background:#fff7ed}.item strong{color:#7c2d12}.item span{font-size:12px;font-weight:750;color:#c2410c;text-transform:uppercase;letter-spacing:.06em}.cta{display:block;margin-top:22px;padding:15px 20px;border-radius:10px;background:#ea580c;color:white;text-align:center;text-decoration:none;font-weight:800}.mail-foot{padding:18px 32px;border-top:1px solid #f3e2d5;background:#fffaf6;color:#7b685b;font-size:12px;text-align:center}@media(max-width:700px){.page{padding:22px 12px}.dashboard-head,.dashboard-body{padding:18px}.cards{grid-template-columns:1fr}.mail-stage{padding:12px}.mail-top,.mail-body{padding:23px 20px}.banner{padding:17px}.banner h2{font-size:17px}}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="eyebrow">Dashboard preview</div>
+    <h1 class="preview-title">Prominent warning banner</h1>
+    <section class="dashboard">
+      <header class="dashboard-head"><div class="brand">SubTrack Pro</div><div class="eyebrow">Dashboard Overview</div></header>
+      <div class="dashboard-body">
+        <div class="banner">
+          <div class="warn-icon">!</div>
+          <div><h2>Action Required: Update your Postpaid Bills</h2><p>Your monthly budget email sends in three days. Add actual invoice amounts for: OpenAI API, Twilio, AWS.</p></div>
+        </div>
+        <div class="cards"><div class="card"><span>Total monthly spend</span><strong>$1,842</strong></div><div class="card"><span>Active subscriptions</span><strong>14</strong></div><div class="card"><span>Pending postpaid bills</span><strong>3</strong></div></div>
+      </div>
+    </section>
+
+    <div class="section-label"><div class="eyebrow">Email preview</div><h1 class="preview-title">Action-required reminder mail</h1></div>
+    <section class="mail-stage">
+      <article class="mail">
+        <header class="mail-top"><div class="mail-brand">SubTrack Pro</div><h1>Action Required: Update your Postpaid Bills</h1><p>Your monthly budget report is scheduled in three days.</p></header>
+        <div class="mail-body">
+          <p>Add the actual invoice amount for the pending subscriptions below so the report can use exact figures instead of a forecast.</p>
+          <div class="item"><strong>OpenAI API</strong><span>Pending invoice</span></div>
+          <div class="item"><strong>Twilio</strong><span>Pending invoice</span></div>
+          <div class="item"><strong>AWS</strong><span>Pending invoice</span></div>
+          <a class="cta" href="#">Update postpaid bills</a>
+        </div>
+        <footer class="mail-foot">This reminder was generated automatically by SubTrack Pro.</footer>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

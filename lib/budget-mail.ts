@@ -4,6 +4,8 @@ import { buildMonthSummary, formatCurrency, getBudgetReport } from "@/lib/budget
 import { buildBudgetReportPdf, getBudgetPdfFileName } from "@/lib/budget-pdf";
 import { query } from "@/lib/db";
 import { syncAutomaticPaymentStatuses } from "@/lib/payment-status-sync";
+import { isMonthlyBudgetSendDay } from "@/lib/budget-schedule";
+import { syncPostpaidBillStatuses } from "@/lib/postpaid-status";
 import {
   normalizeSubscriptionPlan,
   type Subscription,
@@ -11,6 +13,7 @@ import {
 
 interface BudgetMailSettingsRow {
   enabled: boolean;
+  send_day: number;
 }
 
 interface BudgetRecipientRow {
@@ -101,7 +104,9 @@ function isChargeableSubscription(subscription: Subscription) {
   const amount = Number.parseFloat(
     (subscription.subscription === "PAYG"
       ? subscription.estimated_monthly_budget || subscription.price
-      : subscription.price
+      : subscription.subscription === "PAYG (Postpaid)"
+        ? subscription.estimated_monthly_bill || subscription.price
+        : subscription.price
     ).replace(/[^0-9.]/g, ""),
   );
 
@@ -196,6 +201,11 @@ async function getAllSubscriptions() {
       last_top_up_date,
       current_balance,
       payg_top_ups,
+      estimated_monthly_bill,
+      statement_generation_date,
+      bill_status,
+      bill_status_month,
+      postpaid_bills,
       login_email,
       action,
       payment_status,
@@ -210,9 +220,9 @@ async function getAllSubscriptions() {
   })) as Subscription[];
 }
 
-async function getBudgetMailDelivery() {
+export async function getBudgetMailDelivery() {
   const settingsResult = await query(
-    `SELECT id, enabled
+    `SELECT id, enabled, send_day
      FROM budget_mail_settings
      ORDER BY updated_at ASC
      LIMIT 1`,
@@ -222,7 +232,11 @@ async function getBudgetMailDelivery() {
     | undefined;
 
   if (!settings) {
-    return { enabled: false, recipients: [] as BudgetRecipientRow[] };
+    return {
+      enabled: false,
+      send_day: 1,
+      recipients: [] as BudgetRecipientRow[],
+    };
   }
 
   const recipientsResult = await query(
@@ -235,6 +249,7 @@ async function getBudgetMailDelivery() {
 
   return {
     enabled: settings.enabled,
+    send_day: settings.send_day,
     recipients: recipientsResult.rows as BudgetRecipientRow[],
   };
 }
@@ -264,7 +279,7 @@ function buildRows(
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
                 <tr>
                   <td style="padding:0 0 10px;font-size:12px;line-height:18px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Plan</td>
-                  <td style="padding:0 0 10px;font-size:12px;line-height:18px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">${item.amountSource?.startsWith("payg_") ? "Budget basis" : "Due Date"}</td>
+                  <td style="padding:0 0 10px;font-size:12px;line-height:18px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">${item.amountSource !== "fixed" ? "Budget basis" : "Due Date"}</td>
                   <td align="right" style="padding:0 0 10px;font-size:12px;line-height:18px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">Price</td>
                 </tr>
                 <tr>
@@ -274,6 +289,12 @@ function buildRows(
                       ? "Actual top-ups"
                       : item.amountSource === "payg_estimate"
                         ? "Estimated budget"
+                        : item.amountSource === "postpaid_actual"
+                          ? "Actual invoice"
+                          : item.amountSource === "postpaid_average"
+                            ? "3-month average"
+                            : item.amountSource === "postpaid_estimate"
+                              ? "Estimated bill"
                         : formatDueDate(item.dueDate),
                   )}</td>
                   <td align="right" style="padding:0;font-size:15px;line-height:22px;color:#111827;font-weight:700;">${escapeHtml(item.price || formatCurrency(item.amount))}</td>
@@ -311,15 +332,18 @@ function buildBudgetEmail(subscriptions: Subscription[], referenceDate: Date) {
             .budget-card { width: 100% !important; border-radius: 12px !important; }
             .budget-hero { padding: 24px 18px !important; }
             .budget-section { padding: 18px !important; }
-            .budget-stack, .budget-stack tbody, .budget-stack tr, .budget-stack td { display: block !important; width: 100% !important; }
-            .budget-kpi { padding: 0 0 14px !important; box-sizing: border-box !important; }
-            .budget-kpi-last { padding-bottom: 0 !important; }
+            .budget-stack, .budget-stack tbody, .budget-stack tr { display: block !important; width: 100% !important; }
+            .budget-stack tr { font-size: 0 !important; }
+            .budget-kpi { display: inline-block !important; width: 50% !important; box-sizing: border-box !important; }
+            .budget-kpi-previous { padding: 0 7px 14px 0 !important; }
+            .budget-kpi-current { padding: 0 0 14px 7px !important; }
+            .budget-kpi-change { display: block !important; width: 100% !important; padding: 0 !important; }
             .budget-kpi-card { margin: 0 !important; }
             .budget-copy { font-size: 14px !important; line-height: 22px !important; }
           }
         </style>
         <div class="budget-shell" style="max-width:860px;margin:0 auto;">
-        <div class="budget-card" style="max-width:860px;margin:0 auto;background:#ffffff;border:1px solid #dbe4ff;border-radius:20px;overflow:hidden;box-shadow:0 25px 60px rgba(79,70,229,0.12);">
+        <div class="budget-card" style="max-width:860px;margin:0 auto;background:#ffffff;border:1px solid #dbe4ff;border-radius:20px;overflow:hidden;">
           <div class="budget-hero" style="background:#6366f1;padding:28px 32px;color:#ffffff;">
             <div style="font-size:12px;letter-spacing:0.14em;text-transform:uppercase;opacity:0.85;">SubTrack Pro Budget</div>
             <h1 style="margin:10px 0 0;font-size:30px;line-height:1.2;">Monthly spend recap and forecast</h1>
@@ -331,22 +355,22 @@ function buildBudgetEmail(subscriptions: Subscription[], referenceDate: Date) {
 
           <div class="budget-section" style="padding:28px 32px 12px;">
             <table class="budget-stack" role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
-              <tr>
-                <td class="budget-kpi" width="33.333%" valign="top" style="width:33.333%;padding:0 8px 16px 0;">
+              <tr style="display:flex;flex-wrap:wrap;">
+                <td class="budget-kpi budget-kpi-previous" width="33.333%" valign="top" style="flex:1 1 150px;min-width:0;width:33.333%;box-sizing:border-box;padding:0 8px 16px 0;">
                   <div class="budget-kpi-card" style="border:1px solid #e5e7eb;border-radius:16px;padding:18px;">
                     <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;">Last month</div>
                     <div style="margin-top:8px;font-size:28px;font-weight:800;color:#111827;">${escapeHtml(formatCurrency(report.previousMonth.total))}</div>
                     <div style="margin-top:6px;font-size:13px;color:#6b7280;">${escapeHtml(report.previousMonth.label)}</div>
                   </div>
                 </td>
-                <td class="budget-kpi" width="33.333%" valign="top" style="width:33.333%;padding:0 8px 16px;">
+                <td class="budget-kpi budget-kpi-current" width="33.333%" valign="top" style="flex:1 1 150px;min-width:0;width:33.333%;box-sizing:border-box;padding:0 8px 16px;">
                   <div class="budget-kpi-card" style="border:1px solid #e5e7eb;border-radius:16px;padding:18px;">
                     <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;">New month</div>
                     <div style="margin-top:8px;font-size:28px;font-weight:800;color:#111827;">${escapeHtml(formatCurrency(report.currentMonth.total))}</div>
                     <div style="margin-top:6px;font-size:13px;color:#6b7280;">${escapeHtml(report.currentMonth.label)}</div>
                   </div>
                 </td>
-                <td class="budget-kpi budget-kpi-last" width="33.333%" valign="top" style="width:33.333%;padding:0 0 16px 8px;">
+                <td class="budget-kpi budget-kpi-change" width="33.333%" valign="top" style="flex:1 1 150px;min-width:0;width:33.333%;box-sizing:border-box;padding:0 0 16px 8px;">
                   <div class="budget-kpi-card" style="border:1px solid #e5e7eb;border-radius:16px;padding:18px;">
                     <div style="font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;">MoM change</div>
                     <div style="margin-top:8px;font-size:28px;font-weight:800;color:${
@@ -479,8 +503,52 @@ async function sendZohoBudgetEmail(
   }
 }
 
+export async function sendZohoHtmlEmail(
+  primaryEmail: string,
+  ccEmails: string[],
+  subject: string,
+  html: string,
+) {
+  const accessToken = await getZohoAccessToken();
+  const accountId = await getZohoAccountId(accessToken);
+  const response = await fetch(
+    `https://mail.zoho.com/api/accounts/${accountId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Zoho-oauthtoken ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        fromAddress: getZohoFromAddress(),
+        toAddress: primaryEmail,
+        ...(ccEmails.length > 0 ? { ccAddress: ccEmails.join(",") } : {}),
+        subject,
+        content: html,
+        mailFormat: "html",
+      }),
+      cache: "no-store",
+    },
+  );
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Failed to send Zoho email: ${body}`);
+  }
+}
+
+export async function sendMonthlyBudgetReportIfDue(referenceDate = new Date()) {
+  const delivery = await getBudgetMailDelivery();
+  if (!isMonthlyBudgetSendDay(delivery.send_day, referenceDate)) {
+    return { sent: 0, emailsSent: 0, skipped: "not_scheduled_day" };
+  }
+
+  return sendMonthlyBudgetReport(referenceDate);
+}
+
 export async function sendMonthlyBudgetReport(referenceDate = new Date()) {
   await syncAutomaticPaymentStatuses(referenceDate);
+  await syncPostpaidBillStatuses(referenceDate);
   const [subscriptions, delivery] = await Promise.all([
     getAllSubscriptions(),
     getBudgetMailDelivery(),

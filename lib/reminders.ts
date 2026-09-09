@@ -257,7 +257,7 @@ async function getUnpaidSubscriptions() {
      FROM subscriptions
      WHERE COALESCE(payment_status, '') != 'Paid'
        AND COALESCE(action, '') != 'FREE'
-       AND COALESCE(subscription, '') NOT IN ('Free', 'PAYG')
+       AND COALESCE(subscription, '') NOT IN ('Free', 'PAYG', 'PAYG (Postpaid)')
      ORDER BY created_at DESC`,
   );
 

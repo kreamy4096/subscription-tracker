@@ -5,6 +5,7 @@ import { encryptCredential } from "@/lib/credentials";
 import { query } from "@/lib/db";
 import { serializeSubscriptionRow } from "@/lib/subscription-serialization";
 import { syncAutomaticPaymentStatuses } from "@/lib/payment-status-sync";
+import { syncPostpaidBillStatuses } from "@/lib/postpaid-status";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,7 @@ export async function GET(request: Request) {
 
   try {
     await syncAutomaticPaymentStatuses();
+    await syncPostpaidBillStatuses();
 
     const result = await query(
       `SELECT
@@ -35,6 +37,11 @@ export async function GET(request: Request) {
         last_top_up_date,
         current_balance,
         payg_top_ups,
+        estimated_monthly_bill,
+        statement_generation_date,
+        bill_status,
+        bill_status_month,
+        postpaid_bills,
         login_email,
         login_password,
         login_password_ciphertext,
@@ -89,6 +96,11 @@ export async function POST(request: Request) {
       last_top_up_date,
       current_balance,
       payg_top_ups,
+      estimated_monthly_bill,
+      statement_generation_date,
+      bill_status,
+      bill_status_month,
+      postpaid_bills,
       login_email,
       login_password,
       action,
@@ -112,6 +124,11 @@ export async function POST(request: Request) {
         last_top_up_date,
         current_balance,
         payg_top_ups,
+        estimated_monthly_bill,
+        statement_generation_date,
+        bill_status,
+        bill_status_month,
+        postpaid_bills,
         login_email,
         login_password,
         login_password_ciphertext,
@@ -119,7 +136,7 @@ export async function POST(request: Request) {
         login_password_tag,
         action,
         payment_status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, NULL, $13, $14, $15, $16, $17)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15, $16::jsonb, $17, NULL, $18, $19, $20, $21, $22)
       RETURNING
         id,
         tool,
@@ -133,6 +150,11 @@ export async function POST(request: Request) {
         last_top_up_date,
         current_balance,
         payg_top_ups,
+        estimated_monthly_bill,
+        statement_generation_date,
+        bill_status,
+        bill_status_month,
+        postpaid_bills,
         login_email,
         login_password,
         login_password_ciphertext,
@@ -157,6 +179,11 @@ export async function POST(request: Request) {
         last_top_up_date || null,
         current_balance || null,
         JSON.stringify(payg_top_ups),
+        estimated_monthly_bill || null,
+        statement_generation_date || null,
+        bill_status,
+        bill_status_month || null,
+        JSON.stringify(postpaid_bills),
         login_email,
         encryptedPassword?.ciphertext ?? null,
         encryptedPassword?.iv ?? null,

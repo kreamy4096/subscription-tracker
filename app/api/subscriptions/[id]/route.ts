@@ -34,6 +34,11 @@ export async function PUT(
       last_top_up_date,
       current_balance,
       payg_top_ups,
+      estimated_monthly_bill,
+      statement_generation_date,
+      bill_status,
+      bill_status_month,
+      postpaid_bills,
       login_email,
       login_password,
       action,
@@ -71,12 +76,15 @@ export async function PUT(
     const shouldAdvanceRecurringCycle =
       payment_status === "Paid" &&
       existing.payment_status !== "Paid" &&
-      billing_type !== "one_time" && subscription !== "PAYG";
+      billing_type !== "one_time" &&
+      subscription !== "PAYG" &&
+      subscription !== "PAYG (Postpaid)";
     const savedNextDueDate = shouldAdvanceRecurringCycle
       ? addBillingCycle(nextDueDateValue || next_due_date || due_date, billing_type)
       : next_due_date;
     const savedDueDate = shouldAdvanceRecurringCycle ? savedNextDueDate : due_date;
-    const savedPaymentStatus = subscription === "PAYG"
+    const savedPaymentStatus =
+      subscription === "PAYG" || subscription === "PAYG (Postpaid)"
       ? payment_status
       : shouldAdvanceRecurringCycle
       ? "Paid"
@@ -100,25 +108,30 @@ export async function PUT(
         last_top_up_date = $9,
         current_balance = $10,
         payg_top_ups = $11::jsonb,
-        login_email = $12,
-        login_password = CASE WHEN $13::text IS NULL THEN login_password ELSE NULL END,
-        login_password_ciphertext = COALESCE($13, login_password_ciphertext),
-        login_password_iv = COALESCE($14, login_password_iv),
-        login_password_tag = COALESCE($15, login_password_tag),
-        action = $16,
+        estimated_monthly_bill = $12,
+        statement_generation_date = $13,
+        bill_status = $14,
+        bill_status_month = $15,
+        postpaid_bills = $16::jsonb,
+        login_email = $17,
+        login_password = CASE WHEN $18::text IS NULL THEN login_password ELSE NULL END,
+        login_password_ciphertext = COALESCE($18, login_password_ciphertext),
+        login_password_iv = COALESCE($19, login_password_iv),
+        login_password_tag = COALESCE($20, login_password_tag),
+        action = $21,
         status_changed_at = CASE
-          WHEN payment_status IS DISTINCT FROM $17 THEN now()
+          WHEN payment_status IS DISTINCT FROM $22 THEN now()
           ELSE status_changed_at
         END,
         auto_paid_at = CASE
           WHEN due_date IS DISTINCT FROM $3
             OR next_due_date IS DISTINCT FROM $6::date THEN NULL
-          WHEN payment_status IS DISTINCT FROM $17 AND $17 = 'Not Paid' THEN NULL
-          WHEN payment_status = 'Not Paid' AND $17 = 'Paid' THEN now()
+          WHEN payment_status IS DISTINCT FROM $22 AND $22 = 'Not Paid' THEN NULL
+          WHEN payment_status = 'Not Paid' AND $22 = 'Paid' THEN now()
           ELSE auto_paid_at
         END,
-        payment_status = $17
-      WHERE id = $18
+        payment_status = $22
+      WHERE id = $23
       RETURNING
         id,
         tool,
@@ -132,6 +145,11 @@ export async function PUT(
         last_top_up_date,
         current_balance,
         payg_top_ups,
+        estimated_monthly_bill,
+        statement_generation_date,
+        bill_status,
+        bill_status_month,
+        postpaid_bills,
         login_email,
         login_password,
         login_password_ciphertext,
@@ -156,6 +174,11 @@ export async function PUT(
         last_top_up_date || null,
         current_balance || null,
         JSON.stringify(payg_top_ups),
+        estimated_monthly_bill || null,
+        statement_generation_date || null,
+        bill_status,
+        bill_status_month || null,
+        JSON.stringify(postpaid_bills),
         login_email,
         encryptedPassword?.ciphertext ?? null,
         encryptedPassword?.iv ?? null,
@@ -199,7 +222,7 @@ export async function DELETE(
     const result = await query(
       `DELETE FROM subscriptions
        WHERE id = $1
-       RETURNING id, tool, subscription, due_date, billing_type, recurrence_day, next_due_date, price, estimated_monthly_budget, last_top_up_date, current_balance, payg_top_ups, login_email, action, payment_status, created_at`,
+       RETURNING id, tool, subscription, due_date, billing_type, recurrence_day, next_due_date, price, estimated_monthly_budget, last_top_up_date, current_balance, payg_top_ups, estimated_monthly_bill, statement_generation_date, bill_status, bill_status_month, postpaid_bills, login_email, action, payment_status, created_at`,
       [id],
     );
 

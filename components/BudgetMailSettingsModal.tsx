@@ -60,6 +60,7 @@ export default function BudgetMailSettingsModal({
   onNotify,
 }: BudgetMailSettingsModalProps) {
   const [enabled, setEnabled] = useState(true);
+  const [sendDay, setSendDay] = useState(1);
   const [recipients, setRecipients] = useState<RecipientDraft[]>([]);
   const [newEmail, setNewEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -88,6 +89,7 @@ export default function BudgetMailSettingsModal({
         }
 
         setEnabled(data.enabled !== false);
+        setSendDay(data.send_day ?? 1);
         setRecipients(normalizeRecipients(data.recipients ?? []));
         setNewEmail("");
       } catch (loadError) {
@@ -182,7 +184,7 @@ export default function BudgetMailSettingsModal({
       const response = await fetch("/api/budget-settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled, recipients }),
+        body: JSON.stringify({ enabled, send_day: sendDay, recipients }),
       });
       const data = await response.json();
 
@@ -266,7 +268,7 @@ export default function BudgetMailSettingsModal({
                     Monthly budget email
                   </p>
                   <p className="mt-1 text-label-sm text-secondary">
-                    Sent on the first day of each month and available on demand.
+                    Sent monthly on your selected day and available on demand.
                   </p>
                 </div>
                 <button
@@ -281,6 +283,24 @@ export default function BudgetMailSettingsModal({
                   {enabled ? "Enabled" : "Disabled"}
                 </button>
               </div>
+
+              <label className="mt-[21px] block rounded-xl border border-outline-variant bg-surface-container-low ui-panel-pad">
+                <span className="mb-2 block text-label-md font-semibold text-on-surface">
+                  Monthly email day
+                </span>
+                <input
+                  type="number"
+                  min="1"
+                  max="28"
+                  value={sendDay}
+                  onChange={(event) => setSendDay(Number.parseInt(event.target.value, 10) || 1)}
+                  className="h-11 w-full rounded-lg border border-outline-variant bg-surface-container-lowest ui-control-pad text-body-md outline-none focus:border-primary focus:ring-2 focus:ring-primary"
+                  required
+                />
+                <p className="mt-2 text-label-sm text-secondary">
+                  Pending postpaid bill reminders are sent three days before this date.
+                </p>
+              </label>
 
               <div className="mt-[21px] overflow-hidden rounded-xl border border-outline-variant">
                 {recipients.length === 0 ? (

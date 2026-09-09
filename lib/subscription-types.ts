@@ -4,6 +4,12 @@ export interface PaygTopUp {
   amount: string;
 }
 
+export interface PostpaidBill {
+  id: string;
+  month: string;
+  amount: string;
+}
+
 export interface Subscription {
   id: string;
   tool: string;
@@ -17,6 +23,11 @@ export interface Subscription {
   last_top_up_date?: string;
   current_balance?: string;
   payg_top_ups?: PaygTopUp[];
+  estimated_monthly_bill?: string;
+  statement_generation_date?: string;
+  bill_status?: "Pending Invoice" | "Settled";
+  bill_status_month?: string;
+  postpaid_bills?: PostpaidBill[];
   login_email: string;
   login_password?: string;
   has_login_password?: boolean;
@@ -48,7 +59,7 @@ export const subscriptionPlanOptions = [
   "Free",
   "Paid",
   "PAYG",
-  "Pro(The Zone)",
+  "PAYG (Postpaid)",
 ] as const;
 
 export type SubscriptionPlan = (typeof subscriptionPlanOptions)[number];
@@ -86,6 +97,7 @@ export interface ReminderRecipient {
 export interface BudgetMailSettings {
   id?: string;
   enabled: boolean;
+  send_day: number;
   recipients: ReminderRecipient[];
   updated_at?: string;
 }
